@@ -1,111 +1,1022 @@
+@import "tailwindcss";
+
+/* ── Bridge CSS vars → Tailwind utilities ──────────────────────────── */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-muted: var(--ink-muted);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+
+  --color-critical: var(--critical);
+  --color-critical-pale: var(--critical-pale);
+  --color-warning: var(--warning);
+  --color-warning-pale: var(--warning-pale);
+  --color-info: var(--info);
+  --color-info-pale: var(--info-pale);
+  --color-stable: var(--stable);
+  --color-stable-pale: var(--stable-pale);
+
+  --font-serif: "Instrument Serif", "Iowan Old Style", Georgia, serif;
+  --font-sans: "Lexend", -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius: 4px;
+  /* Surfaces (info cards, containers, patient cards) — softer than §6
+   * spec (4 px max). Chosen with the team to calm scanning on a dense
+   * clinical dashboard. If you re-tighten to match the instrument
+   * register, drop to 4 px in this single token. */
+  --radius-card: 12px;
+}
+
+/* ── Design system — vite/CLAUDE.md §8 ─────────────────────────────── */
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+  /* Neutrals — day mode */
+  --bg:            #FAF8F4;
+  --ink:           #1C1917;
+  --ink-soft:      #3F3B36;
+  --ink-muted:     #A8A29E;
+  --line:          #E7E3DB;
+  --line-soft:     #EFECE5;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+  /* Clinical semantics — IEC 60601-1-8 (non-negotiable) */
+  --critical:      #B91C1C;
+  --critical-pale: #F5D8D8;
+  --warning:       #A16207;
+  --warning-pale:  #F5E7CF;
+  --info:          #0E7490;
+  --info-pale:     #D4EBF0;
+  --stable:        #166534;
+  --stable-pale:   #D8E9DC;
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
+  /* Interaction accent — primary CTAs (CLAUDE.md §3.5) */
+  --accent:        #6F4FF2;
+  --accent-hover:  #5B3FD9;
+  --accent-active: #4C34B8;
+  --accent-ink:    #FFFFFF;
+
+  /* Secondary hover accents — used by .info-hover variants to mark
+   * different sections on hover without touching the IEC clinical
+   * palette (red/amber/cyan/green reserved for patient state, §3.4).
+   * Keep these hues clearly outside IEC: violet, indigo, rose, slate.
+   * Pale variants are the hovered-background tint. */
+  --accent-indigo:      #4C5CAE;
+  --accent-indigo-pale: #E7EAF6;
+  --accent-rose:        #B95A7A;
+  --accent-rose-pale:   #F5E3E9;
+  --accent-slate:       #5F7184;
+  --accent-slate-pale:  #E4E8EC;
+
+  /* Typography */
+  --serif: "Instrument Serif", "Iowan Old Style", Georgia, serif;
+  --sans:  "Lexend", -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+
+  color-scheme: light;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
 
-  @media (max-width: 1024px) {
-    font-size: 16px;
+body.night {
+  --bg:            #14120F;
+  --ink:           #F5F1EA;
+  --ink-soft:      #A8A29E;
+  --ink-muted:     #57534E;
+  --line:          #292524;
+  --line-soft:     #1C1917;
+
+  /* Alarms MUST stay saturated in night mode — safety rule */
+  --critical:      #F87171;
+  --critical-pale: #450A0A;
+  --warning:       #FBBF24;
+  --warning-pale:  #451A03;
+  --info:          #22D3EE;
+  --info-pale:     #083344;
+  --stable:        #4ADE80;
+  --stable-pale:   #052E16;
+
+  --accent:        #8B75F6;
+  --accent-hover:  #9E8BF8;
+  --accent-active: #6F4FF2;
+  --accent-ink:    #0B0A08;
+
+  /* Secondary hover accents — night variants. Pale tokens darken so
+   * they read as "highlighted row" on a dark background. */
+  --accent-indigo:      #8D9BD8;
+  --accent-indigo-pale: #202547;
+  --accent-rose:        #E094AF;
+  --accent-rose-pale:   #3D1E28;
+  --accent-slate:       #96A7B9;
+  --accent-slate-pale:  #212A32;
+
+  color-scheme: dark;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.55;
+  /* Fallback soft-fade for browsers without View Transitions API */
+  transition: background-color 320ms ease, color 320ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html,
+  body {
+    transition: none;
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
+/* ── Day ↔ night theme transition (View Transitions API) ───────────── */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 320ms;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  mix-blend-mode: normal;
 }
 
 #root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
   min-height: 100svh;
+  isolation: isolate;
+}
+
+/* ── Numeric columns: tabular alignment ────────────────────────────── */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── IEC 60601-1-8 motion ──────────────────────────────────────────── */
+@keyframes alarm-pulse-high {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@keyframes alarm-pulse-med {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.75;
+  }
+}
+
+.pulse-high {
+  animation: alarm-pulse-high 0.5s ease-in-out infinite;
+}
+
+.pulse-med {
+  animation: alarm-pulse-med 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-high,
+  .pulse-med {
+    animation: none !important;
+  }
+}
+
+/* ── Watch-state hatching (safety encoding beyond color) ───────────── */
+.hatch-warning {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--warning) 0 4px,
+    var(--warning-pale) 4px 8px
+  );
+}
+
+/* ── Focus ring — sober, high contrast ─────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+body.night :focus-visible {
+  outline-color: var(--ink);
+}
+
+/* ── Patient card — unified shell for every panel in the hero
+ * (SHAP, Physics, Vitals, Recommendation). Idle state only: static
+ * border, no hover change, no outline. The ONLY hover cue is the
+ * framer-motion lift + scale on PatientCard.tsx. No color, no ring.
+ * Stays in the §6 "scientific instrument" register. */
+.patient-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--bg);
+  outline: none;
+  transition: transform 380ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+.patient-card:hover,
+.patient-card:focus-visible {
+  outline: none;
+  border-color: var(--line);
+  transform: translateY(-8px) scale(1.04);
+}
+.patient-card:focus,
+.patient-card:focus-within {
+  outline: none;
+  border-color: var(--line);
+}
+@media (prefers-reduced-motion: reduce) {
+  .patient-card {
+    transition: none;
+  }
+  .patient-card:hover,
+  .patient-card:focus-visible {
+    transform: none;
+  }
+}
+
+/* Container holding internal rows needs overflow:hidden so dividers
+ * clip to rounded corners. Kept as a generic wrapper — no hover on it. */
+.patient-card--group {
+  overflow: hidden;
+}
+
+/* ── Vital card — bedside-readable block (Band 2) ─────────────────────
+ * Large serif value, physiology-correlated trace at the bottom. The
+ * trace rests at 55% opacity and lifts to 100% on hover so focus is
+ * tactile without needing extra chrome. Clinical colors never appear
+ * here — tones come from §3.5 non-clinical accents (rose/indigo/slate).
+ */
+.vital-card {
+  cursor: pointer;
+  outline: none;
+  transition:
+    border-color 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 380ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+.vital-card__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.vital-card__trace {
+  margin-top: 18px;
+  height: 56px;
+  opacity: 0.5;
+  transition: opacity 380ms cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+/* Pronounced hover: 6 px lift + 1.2% scale + ink border. CSS-driven so
+ * :hover is re-evaluated the instant the modal curtain is removed from
+ * the DOM — hover restores without needing the pointer to move. */
+.vital-card:hover,
+.vital-card:focus-visible {
+  transform: translateY(-8px) scale(1.04);
+  border-color: var(--line);
+  outline: none;
+}
+.vital-card:active {
+  transform: translateY(-3px) scale(1.01);
+  transition-duration: 180ms;
+}
+.vital-card:hover .vital-card__trace,
+.vital-card:focus-visible .vital-card__trace {
+  opacity: 0.95;
+}
+
+/* ── Vital detail modal — fade + scale over a dimming curtain ────────
+ * The modal opens with opacity 0→1 and scale 0.96→1, centered in the
+ * viewport. No shared-layout morph from the grid card. No
+ * `backdrop-filter` on the curtain: a blur filter creates a heavy
+ * compositing layer the browser recomposes every frame during the
+ * exit, producing visible jank. A darker rgba gives the same reading
+ * cue at ~0 compositor cost. Backdrop clicks + ESC close; see
+ * VitalDetailModal.tsx. */
+.vital-curtain {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 18, 15, 0.74);
+  z-index: 60;
+}
+body.night .vital-curtain {
+  background: rgba(0, 0, 0, 0.82);
+}
+.vital-expanded-wrap {
+  position: fixed;
+  inset: 0;
+  z-index: 61;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.vital-expanded {
+  pointer-events: auto;
+  width: min(720px, 100%);
+  max-height: calc(100svh - 64px);
+  overflow: hidden;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 36px 40px 32px 40px;
+  position: relative;
+  /* Keep the open / close scale animation pivoting around the middle
+   * of the modal so it never drifts from viewport centre. */
+  transform-origin: 50% 50%;
+}
+.vital-expanded:focus {
+  outline: none;
+}
+
+/* ── Physiology traces — scrolling strip ──────────────────────────────
+ * SVG is 400×56 with 4 identical beats at 100px each. Animation shifts
+ * the whole group by one beat width per `animationDuration` (= 60/HR s),
+ * so the reset at cycle end is visually seamless (every offset lands on
+ * an identical beat).
+ */
+.physio-trace {
+  width: 100%;
+  height: 56px;
+  overflow: hidden;
+}
+.physio-trace--tall {
+  height: 120px;
+}
+.physio-trace__scroll {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.physio-trace__scroll--step {
+  animation-name: physio-ecg-scroll;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+@keyframes physio-ecg-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-25%); }
+}
+
+.physio-trace__pulse-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.physio-pulse-dot {
+  transform-origin: 24px 28px;
+  animation-name: physio-pulse-dot;
+  animation-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  animation-iteration-count: infinite;
+}
+@keyframes physio-pulse-dot {
+  0%   { transform: scale(0.7);  opacity: 0.55; }
+  18%  { transform: scale(1.18); opacity: 1;    }
+  42%  { transform: scale(0.9);  opacity: 0.8;  }
+  100% { transform: scale(0.7);  opacity: 0.55; }
+}
+
+/* ── Thermal gradient — static dual-marker ruler ──────────────────────
+ * No motion (thermal gradient drifts on minute-scale, not beat-scale).
+ * The gap between peripheral and central markers widens as delta-T
+ * grows — that widening is the whole point of the visualization.
+ * Neutral monochrome ramp; no IEC colors here. */
+.thermal-trace {
+  position: relative;
+  width: 100%;
+  height: 56px;
+}
+.thermal-trace__rail {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--line);
+  transform: translateY(-50%);
+  border-radius: 1px;
+}
+.thermal-trace__gap {
+  position: absolute;
+  top: 50%;
+  height: 2px;
+  background: var(--ink-soft);
+  transform: translateY(-50%);
+  border-radius: 1px;
+}
+.thermal-trace__mark {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px;
+  height: 10px;
+  background: var(--bg);
+  border: 1.5px solid var(--ink-soft);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.thermal-trace__mark > span {
+  position: absolute;
+  top: 16px;
+  font-family: var(--sans);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.thermal-trace__mark--periph {
+  border-color: var(--ink-muted);
+}
+.thermal-trace__mark--central {
+  background: var(--ink-soft);
+  border-color: var(--ink-soft);
+}
+
+.thermal-trace--tall {
+  height: 120px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .physio-trace__scroll--step,
+  .physio-pulse-dot {
+    animation: none !important;
+  }
+  .vital-card {
+    transition: border-color 120ms ease;
+  }
+  .vital-card:hover,
+  .vital-card:focus-visible,
+  .vital-card:active {
+    transform: none;
+  }
+  .vital-card__trace {
+    transition: opacity 120ms ease;
+  }
+}
+
+/* ── Credentials form inputs — underline-only, no box (§6) ──────────
+ * Used on the /login credentials view. Transparent background, single
+ * bottom border, thickens to --ink on focus. No outline ring, no fill. */
+.login-field {
+  width: 100%;
+  padding: 10px 2px;
+  font-family: var(--sans);
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  outline: none;
+  transition: border-color 180ms ease;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.login-field::placeholder {
+  color: var(--ink-muted);
+}
+.login-field:hover {
+  border-bottom-color: var(--ink-soft);
+}
+.login-field:focus {
+  border-bottom-color: var(--ink);
+}
+.login-field:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ── Primary CTA — MetaMask-style neobrutalism (CLAUDE.md §3.5, §6) ─ */
+.enter-btn {
+  position: relative;
+  padding: 20px 48px;
+  min-width: 280px;
+  font-family: var(--sans);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  cursor: pointer;
+  box-shadow: 0 10px 24px -12px rgba(28, 25, 23, 0.35);
+  transform-origin: center;
+  overflow: hidden;
+  transition:
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 220ms ease,
+    background-color 220ms ease,
+    color 220ms ease,
+    border-color 220ms ease,
+    padding 220ms ease;
+}
+
+body.night .enter-btn {
+  color: var(--ink);
+  background: var(--bg);
+  border-color: var(--line);
+  box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.7);
+}
+
+.enter-btn-label {
+  display: inline-block;
+  transition: opacity 180ms ease, transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.enter-btn-label-hover {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.enter-btn:hover .enter-btn-label-idle {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+.enter-btn:hover .enter-btn-label-hover {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.enter-btn:hover {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+  padding: 22px 56px;
+  transform: scale(1.06);
+  box-shadow: 0 14px 32px -10px rgba(28, 25, 23, 0.45);
+}
+
+body.night .enter-btn:hover {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+  box-shadow: 0 14px 32px -10px rgba(245, 241, 234, 0.3);
+}
+
+.enter-btn:active {
+  transform: scale(0.98);
+  box-shadow: 0 4px 10px -4px rgba(28, 25, 23, 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .enter-btn,
+  .enter-btn:hover,
+  .enter-btn:active,
+  .enter-btn-label,
+  .enter-btn:hover .enter-btn-label-idle,
+  .enter-btn:hover .enter-btn-label-hover {
+    transform: none;
+    transition: background-color 0ms, color 0ms, opacity 120ms, box-shadow 0ms;
+  }
+}
+
+/* ── Back link — only the arrow slides on hover ────────────────────── */
+.back-link {
+  transition: color 180ms ease;
+}
+.back-link:hover {
+  color: var(--ink);
+}
+.back-arrow {
+  display: inline-block;
+  transform-origin: center;
+  transition: transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  will-change: transform;
+}
+.back-link:hover .back-arrow {
+  animation: back-arrow-nudge 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
+}
+@keyframes back-arrow-nudge {
+  0%, 100% { transform: translateX(-4px); }
+  50%      { transform: translateX(-10px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .back-arrow,
+  .back-link:hover .back-arrow {
+    transform: none;
+    animation: none;
+    transition: none;
+  }
+}
+
+/* ── Login — card scan rhythm ──────────────────────────────────────────
+ * Three beats: a single horizontal beam sweeps across the card
+ * illustration (reading) → the card stroke flips to --stable and a ✓
+ * badge springs in (identity confirmed) → full-viewport bright flash
+ * snaps in and covers the /ward route handoff. Composite-only
+ * animations (transform + opacity + stroke-dashoffset). */
+
+/* Reading: a thin vertical beam sweeps across the card in three passes
+ * (L→R→L→R) over MIN_SCAN_MS (2 s — must match Login.tsx). The round-
+ * trip motion reads as a deliberate instrument scan rather than a
+ * one-shot animation. The beam's top and bottom taper to transparent
+ * so it reads as an instrument line, not a hard bar. Stroke is --ink
+ * to stay off IEC alarm colors (§3.4); the keyframe caps peak opacity
+ * at 0.55 to keep it subtle. Card width is 220 px, so ±110 px from
+ * centre covers the full illustration. Each segment gets its own
+ * ease-in-out so the direction changes feel natural at the edges. */
+.card-scan-line {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 146px;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    var(--ink) 28%,
+    var(--ink) 72%,
+    transparent 100%
+  );
+  transform: translate(calc(-50% - 110px), -50%);
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+  animation: card-scan-sweep 2000ms linear forwards;
+}
+@keyframes card-scan-sweep {
+  0% {
+    transform: translate(calc(-50% - 110px), -50%);
+    opacity: 0;
+    animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1);
+  }
+  8%   { opacity: 0.55; }
+  33% {
+    transform: translate(calc(-50% + 110px), -50%);
+    opacity: 0.55;
+    animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1);
+  }
+  66% {
+    transform: translate(calc(-50% - 110px), -50%);
+    opacity: 0.55;
+    animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1);
+  }
+  92%  { opacity: 0.55; }
+  100% {
+    transform: translate(calc(-50% + 110px), -50%);
+    opacity: 0;
+  }
+}
+
+/* Success: the card stroke transitions to --stable (200 ms, via the
+ * inline SVG) and a filled ✓ badge pops in at the top-right corner of
+ * the card. The disc pops in with a spring; the check draws once the
+ * circle has settled. */
+.scan-check-circle {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  opacity: 0;
+  animation: scan-check-pop 380ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  will-change: transform, opacity;
+}
+@keyframes scan-check-pop {
+  0%   { transform: scale(0.55); opacity: 0; }
+  60%  { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1);    opacity: 1; }
+}
+.scan-check-path {
+  stroke-dasharray: 80;
+  stroke-dashoffset: 80;
+  animation: scan-check-draw 260ms cubic-bezier(0.65, 0, 0.35, 1) 220ms forwards;
+  will-change: stroke-dashoffset;
+}
+@keyframes scan-check-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-scan-line {
+    animation: none;
+    opacity: 0;
+  }
+  .scan-check-circle {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .scan-check-path {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ── Bed "breath" — severity-keyed respiratory rate on the pillow ────
+ * Clinically honest: pediatric normal RR ≈ 20–30/min, tachypnea appears
+ * above 40/min for under-5s. We keep it tight around realistic values:
+ *   · Stable  → no motion (CLAUDE.md §5: stable elements never animate)
+ *   · Watch   → 3 s period ≈ 20/min — slightly elevated
+ *   · Critical → 2 s period ≈ 30/min — tachypnea territory
+ * Scale is tiny (≤ 4.5 %) on the pillow only; the rest of the bed stays
+ * still so the motion reads as "something inside this bed is breathing
+ * faster", not "the whole card is wobbling". `transform-box: fill-box`
+ * makes transform-origin relative to the rect, not the SVG viewport. */
+/* Applied to the whole <svg> root (not a single rect) so the breath is
+ * read peripherally — how ICU nurses actually scan a ward. Opacity pulse
+ * is the load-bearing signal; scale adds a visceral "lung" cadence. */
+.bed-breath {
+  transform-origin: center;
+  transform-box: fill-box;
+  will-change: transform, opacity;
+}
+.bed-breath--watch {
+  animation: bed-breath-gentle 3s ease-in-out infinite;
+}
+.bed-breath--critical {
+  animation: bed-breath-rapid 2s ease-in-out infinite;
+}
+@keyframes bed-breath-gentle {
+  0%, 100% { transform: scale(0.96); opacity: 0.55; }
+  50%      { transform: scale(1);    opacity: 1; }
+}
+@keyframes bed-breath-rapid {
+  0%, 100% { transform: scale(0.93); opacity: 0.45; }
+  50%      { transform: scale(1.02); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bed-breath,
+  .bed-breath--watch,
+  .bed-breath--critical {
+    animation: none;
+  }
+}
+
+/* ── Ward patient card — text-only hover ─────────────────────────────
+ * On hover: score + glyph swell, name nudges up, room/label letter-spacing
+ * opens, meta colour sharpens. No card lift, no inset frame, no shadow
+ * (§6). Clinical border colour is preserved as-is. */
+.ward-card {
+  transition: border-color 160ms ease;
+}
+.ward-card-room,
+.ward-card-name,
+.ward-card-meta,
+.ward-card-score,
+.ward-card-glyph,
+.ward-card-label {
+  transition:
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 220ms ease,
+    letter-spacing 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ward-card-score,
+.ward-card-glyph {
+  transform-origin: 100% 50%;
+}
+
+.ward-card:hover .ward-card-room {
+  color: var(--ink);
+  letter-spacing: 0.3em;
+}
+.ward-card:hover .ward-card-name {
+  transform: scale(1.08);
+  transform-origin: 0 50%;
+}
+.ward-card:hover .ward-card-meta {
+  color: var(--ink);
+  transform: scale(1.05);
+  transform-origin: 0 50%;
+}
+.ward-card:hover .ward-card-score {
+  transform: scale(1.14);
+}
+.ward-card:hover .ward-card-glyph {
+  transform: scale(1.22);
+}
+.ward-card:hover .ward-card-label {
+  letter-spacing: 0.32em;
+  transform: scale(1.05);
+  transform-origin: 100% 50%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ward-card:hover .ward-card-name,
+  .ward-card:hover .ward-card-meta,
+  .ward-card:hover .ward-card-score,
+  .ward-card:hover .ward-card-glyph,
+  .ward-card:hover .ward-card-label {
+    transform: none;
+  }
+  .ward-card,
+  .ward-card-room,
+  .ward-card-name,
+  .ward-card-meta,
+  .ward-card-score,
+  .ward-card-glyph,
+  .ward-card-label {
+    transition: color 160ms ease, border-color 160ms ease;
+  }
+}
+
+/* ── Patient loader — editorial wait state for REST + first WS frame ──
+ * Triple-encoded (text + dots + trace) so the wait never reads as silence.
+ * The ECG-style polyline draws across the viewBox, holds, then erases —
+ * a continuous "reading the bedside" gesture. Composite-only: stroke
+ * dashoffset + opacity + transform. No layout work per frame. */
+.loader-trace {
+  stroke-dasharray: 320;
+  stroke-dashoffset: 320;
+  animation: loader-trace 2.6s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+@keyframes loader-trace {
+  0%   { stroke-dashoffset: 320; opacity: 0.15; }
+  25%  { opacity: 1; }
+  60%  { stroke-dashoffset: 0;  opacity: 1; }
+  100% { stroke-dashoffset: -320; opacity: 0.15; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .loader-trace {
+    animation: none;
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+/* ── Patient bands: outer vertical rhythm. Holds the 3-column "hero"
+ * at the top (why | score | vitals) then full-width bands below
+ * (divergence → features → timeline). Padding lives on the wrapper so
+ * every child inherits the same horizontal rhythm. */
+.patient-bands {
   display: flex;
   flex-direction: column;
-  box-sizing: border-box;
+  gap: 40px;
+  padding: 24px 48px 48px 48px;
 }
 
-body {
-  margin: 0;
+/* Patient hero — 3-column layout, clinical triage order left-to-right:
+ *   LEFT   WHY   (SHAP top-3 + R̂ / Q̂ — model's reasoning)
+ *   CENTER VERDICT (Haoma score, severity, gauge, recommendation)
+ *   RIGHT  WHAT (raw vitals — the fallback the clinician trusts)
+ *
+ * Under 1280 px the columns re-stack score → why → vitals so the score
+ * still leads. minmax(0, ...) prevents tall content from forcing a
+ * horizontal scrollbar. */
+.patient-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 32px;
+  align-items: stretch;
 }
-
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
+.patient-hero__left,
+.patient-hero__right {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
 }
-
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
+/* Left + right column children expand to fill the column — the tallest
+ * column sets the track height, the others distribute their panels
+ * equally so neither side reads "empty". */
+.patient-hero__left > *,
+.patient-hero__right > * {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+/* Center column: the score floats to the vertical middle of the track
+ * (was floating at the top next to the taller vitals column). */
+.patient-hero__center {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+@media (max-width: 1280px) {
+  .patient-hero {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
   }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
-p {
-  margin: 0;
+  .patient-hero__center { order: 0; }
+  .patient-hero__left   { order: 1; }
+  .patient-hero__right  { order: 2; }
 }
 
-code,
-.counter {
-  font-family: var(--mono);
+/* Why column — SHAP above physics, always vertical stack in the hero's
+ * narrow left column. No side-by-side variant any more. */
+.why-band {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+/* ── Back arrow (Patient → Ward): icon-only, nudges left on hover ──── */
+.back-arrow-only {
   display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 3px;
+  color: var(--ink-soft);
+  transition: color 180ms ease, background-color 180ms ease, transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.back-arrow-only:hover {
+  color: var(--ink);
+  background: var(--line-soft);
+}
+.back-arrow-only:hover svg {
+  animation: back-arrow-nudge 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
+}
+.back-arrow-only svg {
+  transition: transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+  .back-arrow-only,
+  .back-arrow-only:hover svg {
+    animation: none;
+    transform: none;
+    transition: color 120ms ease, background-color 120ms ease;
+  }
 }
 
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+/* ── Post-auth persistent overlay — survives route unmount ─────────────
+ * Rendered by RootLayout when sessionStorage `haoma.authWipe` is set.
+ * Starts fully covered (circle 150% — matches the end-state of the seal
+ * disc on the previous page for a seamless handoff), holds briefly,
+ * then the iris contracts to circle(0) to reveal the destination route.
+ * Cinematic reveal that reads as a film-iris closing.
+ *
+ * Colour is driven by the `--wipe-color` custom property, set inline by
+ * RootLayout from sessionStorage `haoma.wipeColor` ('stable' on login,
+ * 'accent' on logout). Falls back to --bg if unset. */
+.auth-wipe-hold {
+  position: fixed;
+  inset: 0;
+  background: var(--wipe-color, var(--bg));
+  pointer-events: none;
+  z-index: 60;
+  opacity: 1;
+  clip-path: circle(150% at 50% 50%);
+  animation: auth-wipe-hold 900ms cubic-bezier(0.7, 0, 0.2, 1) forwards;
+}
+@keyframes auth-wipe-hold {
+  0%   { clip-path: circle(150% at 50% 50%); }
+  18%  { clip-path: circle(150% at 50% 50%); }
+  100% { clip-path: circle(0 at 50% 50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-wipe-hold {
+    animation: none;
+    opacity: 0;
+    clip-path: none;
+  }
+}
+
+/* ─── Global critical alert banner — IEC 60601-1-8 high-priority ─────
+ * Two-layer design: a solid red-pale information band + a thin 2 Hz
+ * pulsing stripe. Rationale:
+ *  1. Smaller animated surface than pulsing the whole bar → safer vs
+ *     WCAG 2.3.1 large-area flash guidance.
+ *  2. Information layer (color + glyph + text) persists when the pulse
+ *     is silenced or prefers-reduced-motion is on. IEC forbids an
+ *     active high-priority alarm from going off-screen.
+ */
+.alert-banner {
+  position: relative;
+  background: var(--critical-pale);
+  color: var(--ink);
+  border-top: 2px solid var(--critical);
+  border-bottom: 2px solid var(--critical);
+}
+.alert-banner__pulse-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 2px;
+  background: var(--critical);
+  pointer-events: none;
+}
+.alert-banner[data-silenced='true'] .alert-banner__pulse-overlay {
+  animation: none;
+  opacity: 0.35;
+}
+
+/* Body-level hook — when the banner owns the critical state, ward
+ * cards drop their own glyph pulse so we never stack two 2 Hz sources
+ * (WCAG 2.3.1: avoid multiple simultaneous flashes). */
+body[data-banner-owner] .ward-card .pulse-high {
+  animation: none !important;
 }

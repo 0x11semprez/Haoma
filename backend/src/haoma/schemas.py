@@ -11,6 +11,8 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 AlertLevel = Literal["green", "orange", "red"]
+HaomaTrend = Literal["rising", "stable", "falling"]
+MacroVitalsState = Literal["nominal", "borderline", "abnormal"]
 
 
 class Vitals(BaseModel):
@@ -54,6 +56,38 @@ class ShapContribution(BaseModel):
     label: str
 
 
+class PhysicsSummary(BaseModel):
+    """Physical quantities predicted by the model with percentage change from baseline."""
+
+    resistance: float
+    resistance_delta_pct: float
+    flow: float
+    flow_delta_pct: float
+
+
+class ProjectedPoint(BaseModel):
+    """One forward-looking risk sample.
+
+    Emitted by the PINN (or, for now, by an extrapolation of recent slope).
+    Horizon is expressed relative to the current frame so the frontend never
+    has to reason about timestamps when drawing the projection.
+    """
+
+    seconds_ahead: float = Field(..., ge=0.0)
+    score: float = Field(..., ge=0.0, le=100.0)
+
+
+class DivergenceSignal(BaseModel):
+    """"Silent compensation" flag — macro vitals still nominal while the
+    Haoma index is climbing. This is the Phase 2 moment of the pitch; we
+    surface it server-side so the UI never has to re-derive clinical logic.
+    """
+
+    active: bool
+    lead_minutes: float | None = None
+    rationale: str | None = None
+
+
 class WebSocketFrame(BaseModel):
     """Full payload pushed to the frontend every 2-3 seconds."""
 
@@ -66,6 +100,15 @@ class WebSocketFrame(BaseModel):
     alert_level: AlertLevel
     shap_contributions: list[ShapContribution]
     recommendation: str | None = None
+
+    # --- UI-contract fields (frontend branch). Optional with safe defaults so
+    # existing precompute / tests stay green; the frontend gets non-null values
+    # to render against while the backend progressively populates them.
+    macro_vitals_state: MacroVitalsState = "nominal"
+    projected_trajectory: list[ProjectedPoint] = Field(default_factory=list)
+    divergence: DivergenceSignal = Field(
+        default_factory=lambda: DivergenceSignal(active=False)
+    )
 
 
 class DemoTimestep(WebSocketFrame):

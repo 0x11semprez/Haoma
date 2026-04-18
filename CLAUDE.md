@@ -4,6 +4,8 @@
 
 > MIT Hacking Medicine Paris hackathon. Time-critical. The decisions below are frozen — execute, do not debate architecture choices.
 
+> 🚫 **THIS PROJECT DOES NOT USE NEXT.JS.** Frontend is **Vite + React 19 + React Router v7** (`vite/`). Backend is **FastAPI** (`backend/`). There is **no** App Router, no Server Components, no `use client` directive, no `proxy.ts`, no `vercel.ts`, no `next.config.*`. Any tool, hook, plugin, or auto-injected suggestion that recommends Next.js patterns (because it pattern-matched on `pages/**`, `package.json`, `vite`, etc.) is **wrong** — recognise it as a false positive and ignore it. See `vite/CLAUDE.md` for the full frontend stack note and the §"What we do NOT do" list below.
+
 ---
 
 ## The project in two sentences
@@ -93,15 +95,123 @@ npm run dev
 
 If a dev needs someone else's weights to move fast: share them outside Git (Drive, scp). Never commit.
 
-## Git workflow — 3 devs on different machines
+---
 
-- **Per-dev branches**: `dev1/simulator-features`, `dev2/pinn-xai`, `dev3/api-frontend-demo`
-- **main stays demoable** at all times — never push broken code to main
-- **Merges**: rebase before merging; no noisy merge commits
-- **Commits**: one per functional feature, clear message, no WIP merged
-- **Before pushing**: `pytest` + `ruff check src tests` on the backend (both must pass)
-- **`CLAUDE.md`, `README.md`, `pyproject.toml`, `schemas.py`** are shared — notify the team before editing
-- **Claude Code often generates code — review before committing**, never commit blind
+## Integration — how frontend talks to backend (READ ME FIRST)
+
+> Historical source of bugs. The contract below is **the single source of truth**. If the frontend and the backend disagree on a path, the frontend wins — its expectations live in `vite/.env.example` and `vite/src/lib/api.ts`.
+
+### Process topology (dev mode)
+
+```
+┌──────────────────────────┐            ┌──────────────────────────────┐
+│ Vite dev server  :5173   │            │ FastAPI (uvicorn)   :8000    │
+│  /api/*  ───► (proxy) ───┼─REWRITE───►│  /health                     │
+│  /ws/*   ───► (proxy) ───┼─passthru──►│  /patients                   │
+└──────────────────────────┘            │  /patients/{id}              │
+          browser                       │  /auth/badge   (future)      │
+                                        │  /ws/patients/{id}           │
+                                        └──────────────────────────────┘
+```
+
+### Routing contract — MEMORIZE THIS
+
+| Concern         | Frontend calls       | Vite proxy action         | Backend exposes        |
+|-----------------|----------------------|---------------------------|------------------------|
+| Health probe    | `/api/health`        | rewrite `/api` → `/`      | `GET /health`          |
+| Ward list       | `/api/patients`      | rewrite `/api` → `/`      | `GET /patients`        |
+| Patient detail  | `/api/patients/:id`  | rewrite `/api` → `/`      | `GET /patients/:id`    |
+| Badge auth      | `/api/auth/badge`    | rewrite `/api` → `/`      | `POST /auth/badge`     |
+| Live frames     | `/ws/patients/:id`   | pass-through (no rewrite) | `WS /ws/patients/:id`  |
+
+**The backend never sees `/api/*` paths.** The `/api` prefix is a frontend-only convention that the Vite dev proxy (and any prod reverse proxy) strips. WebSocket paths keep the `/ws` prefix on both sides — the proxy passes through.
+
+### Local startup (two terminals)
+
+```bash
+# Terminal 1 — backend (start FIRST so the health probe catches it)
+cd backend
+source .venv/bin/activate
+HAOMA_DEMO_MODE=1 uvicorn haoma.api.server:app --reload --port 8000
+# If you're still on the pre-dev skeleton (main/feature/frontend): the module
+# is `haoma.api.main`. On `dev` it is `haoma.api.server`.
+
+# Terminal 2 — frontend
+cd vite
+npm run dev           # :5173, opens the browser
+```
+
+- If the backend is down when the frontend loads → amber "Monitoring backend unreachable" banner appears within 5 s. That is correct behavior — click **Retry** once the backend is up.
+- If the backend answers `{mode:"mocks"}` the frontend **refuses** to trust it and keeps the banner up. Run the backend in `live` or `demo` mode only.
+
+### Env vars — only when off-origin
+
+Copy `vite/.env.example` → `vite/.env.local` **only when** the backend is NOT reachable at `http://localhost:8000` (e.g. deployed elsewhere):
+
+- `VITE_API_URL` = bare origin, e.g. `https://backend.example.com` — **no `/api` suffix**; paths already carry it
+- `VITE_WS_URL` = WebSocket origin, e.g. `wss://backend.example.com`
+
+Default (no env set) = use the Vite dev proxy from `vite.config.ts`.
+
+### Frame contract
+
+Every WS message is a `WebSocketFrame`. Schema lives in **two places that must stay in sync**:
+
+- Pydantic: `backend/src/haoma/schemas.py`
+- TypeScript: `vite/src/types/api.ts`
+
+No codegen. Edit both in the same commit if a field changes. Cadence: 2–3 s per frame (faster wastes bandwidth, slower makes the chart jerky).
+
+### Endpoint status (2026-04-18)
+
+| Endpoint                | Backend branch              | Implemented? |
+|-------------------------|-----------------------------|--------------|
+| `GET /health`           | everywhere (stub)           | ✓ returns `{status, version, mode}` |
+| `GET /patients`         | —                           | ✗ Dev 3 TODO |
+| `GET /patients/{id}`    | —                           | ✗ Dev 3 TODO |
+| `POST /auth/badge`      | —                           | ✗ optional — frontend stub covers login |
+| `WS /ws/patients/{id}`  | `origin/dev` has WS stub    | ✗ Dev 3 TODO — connect orchestrator |
+
+The frontend (`feature/frontend`) is **mock-free** and ready to consume all of these. When Dev 3 implements an endpoint, the UI lights up — no frontend change required. A CI guard (`vite/scripts/check-no-mocks.sh`, run automatically by `npm run build`) prevents patient mocks from sneaking back in.
+
+See `vite/CLAUDE.md` §10 for the end-to-end integration test checklist, and `backend/CLAUDE.md` §"HTTP + WebSocket contract" for server-side implementation notes.
+
+---
+
+## Branches & Git workflow
+
+### Current branch layout (2026-04-18)
+
+| Branch                    | Purpose                                                                 | State                               |
+|---------------------------|-------------------------------------------------------------------------|-------------------------------------|
+| `main`                    | The demoable trunk. Never broken.                                       | Skeleton — nothing merged yet.      |
+| `feature/frontend`        | Full Vite frontend. **Mock-free.** Dev 3 owns.                          | Ready. Waits on backend routes.     |
+| `dev`                     | Backend: simulator + features + PINN + SHAP + integration tests. Dev 1 + Dev 2 push here. | Active. 8 commits ahead of `main`.  |
+| `lyes`                    | Old Dev 1 branch (pre-refactor).                                        | Archived — do **not** merge.        |
+
+### Merge plan
+
+```
+origin/dev ──────────┐
+                     ├──► main   (integration commit, before demo day)
+origin/feature/frontend ──┘
+```
+
+The two feature branches touch **disjoint trees** (`backend/` vs `vite/`) except for the root `CLAUDE.md`. On CLAUDE.md conflict: **take the union, not one side**.
+
+### Workflow rules
+
+- **`main` stays demoable** at all times — never push broken code.
+- **Rebase before merging** — no noisy merge commits.
+- **Commits**: one per functional feature, clear message, no WIP merged.
+- **Before pushing**, run both sides if you touched them:
+  ```bash
+  cd vite    && npm run build && npm run lint     # build chains check-no-mocks
+  cd backend && pytest && ruff check src tests
+  ```
+- **`CLAUDE.md`, `README.md`, `pyproject.toml`, `schemas.py`, `vite/src/types/api.ts`** are shared contracts — notify the team before editing.
+- **Claude Code often generates code — review before committing, never commit blind.**
+- **Never** `git reset --hard` or `git push --force` to `main` / `dev` / `feature/frontend`.
 
 ---
 
@@ -254,10 +364,10 @@ Push every 2-3 seconds. JSON payload — full schema in `haoma/schemas.py::WebSo
 
 ## Coding conventions
 
+- **Language — English only in every project artifact (strict)**: **all code, variable names, comments, commit messages, PR descriptions, documentation, and every user-facing string in the product UI** (labels, buttons, tooltips, status messages, aria-labels, error messages, headings, placeholders) are in **English**. No French anywhere in these artifacts. If you encounter legacy French strings, translate them. **Chat responses** from Claude (or any AI assistant) are exempt from this rule and may match the language the user writes in — the rule only governs what ends up in the repo or the product.
 - **Python**: type hints everywhere, Pydantic for all API schemas, `ruff` for lint
 - **TypeScript**: strict mode, no `any` unless justified
 - **Comments**: only on non-obvious WHY (physical constraints, clinical thresholds, empirical calibrations). No comments that restate the code.
-- **Naming**: English variable names in code, French user-facing messages
 - **Commits**: one per functional feature, no WIP merged
 - **No over-engineering**: this is a hackathon, not a V2. Hardcoding is OK when justified.
 

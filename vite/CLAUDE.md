@@ -4,9 +4,15 @@
 > Medical device Class IIa — CE marking in progress.
 > **Mandatory compliance: IEC 60601-1-8 (medical alarms), WCAG AAA, color-blind support.**
 
+> ⚠️ **Stack — read this before assuming anything**: this app is **Vite + React 19 + React Router v7 (data router) + Tailwind v4 + framer-motion**. It is **NOT Next.js**. The `src/pages/` folder is a plain organizational directory, **not** file-system routing — routes are declared in `src/App.tsx` via `createBrowserRouter`. There is no App Router, no Server Components, no `proxy.ts`, no `vercel.ts`. If a tool, hook, or plugin suggests Next.js patterns because it saw `pages/**`, it is wrong — ignore it and stay on Vite/React Router. The root `CLAUDE.md` forbids Next.js (❌ section, "useless overhead for a single-page dashboard").
+
+> 🚫 **Never run `npm run dev` (or any form of `vite`, `vite dev`, the dev server) from Claude.** The developer keeps their own dev server running locally and watches live reload — if the assistant launches one, it steals the port, spams their terminal, and breaks their workflow. This applies to foreground commands, background commands, and one-shot probes (e.g. `timeout 8 npm run dev` to "check it boots"). Validate changes with `npm run build` or `npm run lint` instead — those are short-lived and safe. If Claude ever thinks it needs to start the dev server to verify something, stop and report what needs to be checked in the browser so the developer can do it.
+
 This document defines the frontend design system. Any divergence must be justified and documented — clinical rules (alarm colors, dual encoding, motion) are **non-negotiable**.
 
-> Note: the product UI is in French. Interface labels quoted in this document remain in French. All design guidance and rationale is in English.
+> Note: the product UI, this document, and all design guidance are in **English**. The project uses English-only for every string — labels, buttons, errors, aria-labels, tooltips. See the root `CLAUDE.md` "Coding conventions" for the strict rule.
+
+> 🔌 **Wiring the frontend to the real backend**: the routing contract, Vite proxy behavior, startup sequence, env vars, endpoint status, and frame schema sync rules all live in **root `CLAUDE.md` §Integration** — the single source of truth. This file (`vite/CLAUDE.md`) covers the design system; the integration test checklist for when the live backend comes online lives in §10 below.
 
 ---
 
@@ -113,6 +119,24 @@ This document defines the frontend design system. Any divergence must be justifi
 3. **Never use red / amber / green / cyan** for anything other than the patient's clinical state.
 4. **Every screen must remain intelligible in grayscale** — ultimate test: applying `filter: grayscale(1)` must not lose any critical information.
 
+### 3.5 Interaction accent — primary CTAs
+
+Non-clinical accent tokens for primary call-to-action buttons (filled idle, hover shift, active depth). Kept strictly off IEC alarm colors so affordance never collides with clinical meaning.
+
+| Token | Hex (day) | Hex (night) | Usage |
+|---|---|---|---|
+| `--accent` | `#6F4FF2` | `#8B75F6` | Idle fill of primary CTAs |
+| `--accent-hover` | `#5B3FD9` | `#9E8BF8` | `:hover` fill |
+| `--accent-active` | `#4C34B8` | `#6F4FF2` | `:active` fill |
+| `--accent-ink` | `#FFFFFF` | `#0B0A08` | Text / icon on accent fill |
+
+Rules:
+1. Used **only** on primary CTA buttons (Enter, Sign out, Confirm…). Never on status indicators, text, non-CTA borders, or decoration.
+2. `:hover` adds a ~1 px lift (`translateY(-1px)`) and a subtle violet-tinted shadow.
+3. `:active` uses `scale(0.97)` + the deeper shade — press reads as depth, not highlight.
+4. `prefers-reduced-motion` MUST disable the lift and the scale. Color shifts may remain.
+5. Grayscale test still holds — scale + lift carry the state when hue is stripped.
+
 ---
 
 ## 4. Severity glyphs — dual encoding
@@ -167,9 +191,11 @@ Per IEC 60601-1-8:
 
 ## 6. Radii, dividers, shadows
 
-- `border-radius`: 3–4 px maximum. Never more — "scientific instrument" register.
+- **Surfaces** (cards, sections, containers): `border-radius` 3–4 px max, zero `box-shadow`, zero gradient. "Scientific instrument" register preserved here — non-negotiable.
+- **Primary CTAs** (Enter, Sign out, Confirm…): rounded rectangle (`border-radius: 8 px`), filled accent color (§3.5), 2 px ink-colored outline, hard offset shadow (`4px 4px 0 0 var(--ink)`) for tactile depth. `:hover` lifts the button (`translate(-2px, -2px)` + shadow grows to `6px 6px`); `:active` pushes it into the page (`translate(4px, 4px)` + shadow collapses to 0). This is the **only** place deep shadow and ink outlines are allowed.
+- **Icon / toggle buttons** (NightToggle, MuteToggle): 3 px radius, outlined, no fill — stays in instrument register.
 - Dividers: 1 px for internal separations, 2 px for alarm banners.
-- **Zero box-shadow, zero gradient** (with the exception of diagonal hatching used for watch-state safety encoding).
+- **Exception preserved**: diagonal hatching for "watch" state.
 - Diagonal hatching for "watch" state:
   ```css
   background: repeating-linear-gradient(
@@ -217,6 +243,12 @@ All views share the same colors, typefaces, glyphs, and alarm timings.
   --stable:        #166534;
   --stable-pale:   #D8E9DC;
 
+  /* ─── Interaction accent — primary CTAs (§3.5) ─────── */
+  --accent:        #6F4FF2;
+  --accent-hover:  #5B3FD9;
+  --accent-active: #4C34B8;
+  --accent-ink:    #FFFFFF;
+
   /* ─── Typography ──────────────────────────── */
   --serif: "Instrument Serif", "Iowan Old Style", Georgia, serif;
   --sans:  "Lexend", -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
@@ -238,6 +270,11 @@ body.night {
   --info-pale:     #083344;
   --stable:        #4ADE80;
   --stable-pale:   #052E16;
+
+  --accent:        #8B75F6;
+  --accent-hover:  #9E8BF8;
+  --accent-active: #6F4FF2;
+  --accent-ink:    #0B0A08;
 }
 
 html, body {
@@ -264,5 +301,45 @@ Every frontend PR must pass these checks before review:
 - [ ] `prefers-reduced-motion` respected
 - [ ] Night mode: alarms keep their original saturation
 - [ ] Typefaces limited to Instrument Serif + Lexend (no other family)
-- [ ] No `box-shadow`, no `border-radius` > 4 px
+- [ ] No `box-shadow` / gradient on surfaces (cards, sections). Primary CTA pill + subtle shadow is the only allowed exception (§3.5, §6)
+- [ ] `border-radius` ≤ 4 px on surfaces; 999 px (pill) allowed only on primary CTAs (§6)
 - [ ] `tabular-nums` active on every aligned numeric column
+
+---
+
+## 10. Integration test checklist — ready-to-test against the live PINN backend
+
+> The frontend is now mock-free for every patient-facing flow. The single remaining stub is `stubAuthenticateBadge` in `src/lib/auth-stub.ts` (login placeholder, swapped out when backend auth ships).
+
+Run `bash scripts/check-no-mocks.sh` before every push. The `npm run build` script chains it automatically.
+
+When the FastAPI backend comes online, walk through this checklist to validate end-to-end:
+
+### Boot & connectivity
+- [ ] `GET /api/health` returns `{ status: "ok", mode: "live" | "demo" }`. `BackendUnreachableBanner` stays hidden.
+- [ ] Cold backend (service down) → banner appears within 5 s (probe timeout). Retry re-runs the probe.
+- [ ] `vite/.env.example` copied to `.env.local` only if backend is off-origin; otherwise the Vite proxy is enough.
+
+### Ward view (`/ward`)
+- [ ] `GET /api/patients` populates the grid. Empty array → "No patients to monitor". 5xx → ErrorPanel with Retry.
+- [ ] Sort order: critical → watch → stable, then `haoma_index desc` within each band.
+- [ ] Each card clickable → navigates to `/patient/:id`.
+- [ ] `CriticalAlertBar` appears iff at least one patient is red.
+
+### Patient view (`/patient/:id`)
+- [ ] `GET /api/patients/:id` 200 → `PatientHeader` renders. 404 → `PatientErrorPanel` with Retry.
+- [ ] `WS /ws/patients/:id` connects; `ConnectionChip` reflects status (connecting → open → closed/error).
+- [ ] Frames arrive every 2–3 s. `ScoreBanner`, `VitalsGrid`, `FeaturesPanel`, `DivergenceBanner`, `ContributingFactors`, `ScoreTimeline` all render without crash when fields are missing or empty.
+- [ ] WS drop mid-session → last frame stays on screen; chip turns red/amber.
+- [ ] Silence button mutes alerts only for the active critical window.
+
+### Clinical safety
+- [ ] Pulse animations fire only on `pulse-high` (critical) / `pulse-med` (watch). Stable is static.
+- [ ] `prefers-reduced-motion` disables all pulses (§5 CSS already enforces).
+- [ ] `filter: grayscale(1)` sanity — no clinical information lost.
+- [ ] No red outside IEC patient-critical. `BackendUnreachableBanner` uses amber + diamond (degraded-monitoring, medium priority).
+
+### CI guard
+- [ ] `npm run check:mocks` exits 0.
+- [ ] `npm run build` succeeds (runs the mock guard first).
+- [ ] `npm run lint` passes.
