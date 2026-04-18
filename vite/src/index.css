@@ -972,3 +972,40 @@ body.night .enter-btn:hover {
     opacity: 0;
   }
 }
+
+/* ─── Global critical alert banner — IEC 60601-1-8 high-priority ─────
+ * Two-layer design: a solid red-pale information band + a thin 2 Hz
+ * pulsing stripe. Rationale:
+ *  1. Smaller animated surface than pulsing the whole bar → safer vs
+ *     WCAG 2.3.1 large-area flash guidance.
+ *  2. Information layer (color + glyph + text) persists when the pulse
+ *     is silenced or prefers-reduced-motion is on. IEC forbids an
+ *     active high-priority alarm from going off-screen.
+ */
+.alert-banner {
+  position: relative;
+  background: var(--critical-pale);
+  color: var(--ink);
+  border-top: 2px solid var(--critical);
+  border-bottom: 2px solid var(--critical);
+}
+.alert-banner__pulse-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 2px;
+  background: var(--critical);
+  pointer-events: none;
+}
+.alert-banner[data-silenced='true'] .alert-banner__pulse-overlay {
+  animation: none;
+  opacity: 0.35;
+}
+
+/* Body-level hook — when the banner owns the critical state, ward
+ * cards drop their own glyph pulse so we never stack two 2 Hz sources
+ * (WCAG 2.3.1: avoid multiple simultaneous flashes). */
+body[data-banner-owner] .ward-card .pulse-high {
+  animation: none !important;
+}
