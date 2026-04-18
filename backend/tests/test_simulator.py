@@ -210,6 +210,27 @@ def test_training_factory() -> None:
         assert len(stay["warmup_states"]) == WARMUP_DURATION_S
 
 
+def test_bp_stays_flat_during_compensation() -> None:
+    """BP must stay near baseline during compensation — the medical advisor confirmed
+    that in pediatric sepsis the compensation goes through tachycardia, not through
+    rising systemic resistance. An early BP bump of >8 mmHg would misrepresent the
+    physiology and contradict the clinical narrative we defend to the jury.
+    """
+    config = PatientConfig(patient_id="bp_flat", seed=42)
+    engine = PhysiologyEngine(config, mode="degradation")
+    engine.degradation_onset = 60
+    engine.degradation_midpoint = 200
+
+    # Compensation window (d rises from ~0.08 to ~0.22 with default steepness).
+    states_comp = [engine.generate(float(t)) for t in range(120, 150)]
+    mean_bp = sum(s.bp_sys for s in states_comp) / len(states_comp)
+
+    assert mean_bp < config.baseline_bp_sys + 8, (
+        f"BP rises too much during compensation: {mean_bp:.1f} "
+        f"vs baseline {config.baseline_bp_sys}"
+    )
+
+
 def test_demo_engine_roundtrip() -> None:
     """The rehearsed demo scenario runs end-to-end and produces a serializable state."""
     engine = create_demo_engine()

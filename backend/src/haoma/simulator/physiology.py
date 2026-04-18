@@ -134,13 +134,16 @@ class PhysiologyEngine:
             + noise[IDX_TPER] * 0.5
         )
 
-        # --- BP_sys: compensatory push, then late collapse (d³ dominates).
-        push_sys = d * 15.0 * (1.0 - d**2)
-        crash_sys = (d**3) * 40.0
+        # --- BP_sys: in pediatric sepsis, blood pressure stays quasi-flat during
+        # compensation (cardiac output preserved by tachycardia, not by rising
+        # systemic resistance — pediatric vessels are more compliant). Collapse
+        # is late and brutal when the heart-rate compensation is overwhelmed.
+        push_sys = d * 6.0 * (1.0 - d**2)     # very mild rise (was 15 pre-advisor)
+        crash_sys = (d**3) * 40.0              # unchanged — late, sharp crash
         bp_sys = cfg.baseline_bp_sys + push_sys - crash_sys + noise[IDX_BPS]
 
-        # --- BP_dia: follows BP_sys.
-        push_dia = d * 8.0 * (1.0 - d**2)
+        # --- BP_dia: follows BP_sys with the same medically-reviewed amplitude.
+        push_dia = d * 3.0 * (1.0 - d**2)     # was 8 pre-advisor
         crash_dia = (d**3) * 20.0
         bp_dia = cfg.baseline_bp_dia + push_dia - crash_dia + noise[IDX_BPD]
 
