@@ -8,3 +8,7 @@ Computes 4 features from raw simulator output:
 
 See ../../CLAUDE.md section "Features (Dev 1) — 4 features seulement".
 """
+
+from haoma.features.engine import FeatureEngine, FeatureNormalizer
+
+__all__ = ["FeatureEngine", "FeatureNormalizer"]
