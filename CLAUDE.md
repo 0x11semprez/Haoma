@@ -188,7 +188,6 @@ See `vite/CLAUDE.md` §10 for the end-to-end integration test checklist, and `ba
 | `feature/frontend`        | Full Vite frontend. **Mock-free.** Dev 3 owns.                          | Ready. Waits on backend routes.     |
 | `dev`                     | Backend: simulator + features + PINN + SHAP + integration tests. Dev 1 + Dev 2 push here. | Active. 8 commits ahead of `main`.  |
 | `lyes`                    | Old Dev 1 branch (pre-refactor).                                        | Archived — do **not** merge.        |
-| `feature/backend-live` (local-only worktree) | Obsolete `api/main.py` stub that pre-dates the frontend.      | **Recommended to remove** — the real API lives on `dev` as `api/server.py`. Clean up: `git worktree remove ../Haoma-backend && git branch -D feature/backend-live`. |
 
 ### Merge plan
 
