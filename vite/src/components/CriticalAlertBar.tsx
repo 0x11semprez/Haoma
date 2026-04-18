@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { AnimatePresence, motion } from 'framer-motion'
 import { Glyph } from './Glyph'
 import { isSilenced, useCriticalPatients } from '@/hooks/useCriticalPatients'
 import { useAudio } from '@/hooks/useAudio'
@@ -133,27 +134,64 @@ export function CriticalAlertBar() {
         ) : null}
       </button>
 
-      <button
+      {/* Silence button — pill, outlined-by-default, hover flips to a
+       * saturated critical-red fill as the "about to silence" cue.
+       * Text swap (AnimatePresence keyed on `silenced`) matches the
+       * Mute/Night toggle idiom so the whole top bar behaves uniformly.
+       * Disabled path skips the hover animation — reduced-motion is
+       * honored globally via MotionConfig in App.tsx. */}
+      <motion.button
         type="button"
         onClick={onSilence}
         aria-label={silenced ? 'Silenced for 2 minutes' : 'Silence alarm for 2 minutes'}
         disabled={silenced}
         className="uppercase"
+        initial={false}
+        whileHover={
+          silenced
+            ? undefined
+            : {
+                backgroundColor: 'var(--critical)',
+                color: 'var(--bg)',
+                borderColor: 'var(--critical)',
+                scale: 1.04,
+              }
+        }
+        whileTap={silenced ? undefined : { scale: 0.96 }}
+        transition={{ type: 'spring', stiffness: 420, damping: 24 }}
         style={{
           fontSize: 13,
           fontWeight: 600,
           letterSpacing: '0.18em',
-          padding: '8px 14px',
-          background: silenced ? 'transparent' : 'var(--ink)',
-          color: silenced ? 'var(--ink-soft)' : 'var(--bg)',
-          border: `1px solid var(--ink)`,
-          borderRadius: 3,
+          padding: '8px 20px',
+          minWidth: 150,
+          background: 'transparent',
+          color: silenced ? 'var(--ink-soft)' : 'var(--ink)',
+          border: `1px solid ${silenced ? 'var(--ink-soft)' : 'var(--ink)'}`,
+          borderRadius: 999,
           cursor: silenced ? 'not-allowed' : 'pointer',
           fontFamily: 'var(--sans)',
+          position: 'relative',
+          overflow: 'hidden',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          lineHeight: 1.2,
         }}
       >
-        {silenced ? 'Silenced' : 'Silence 2 min'}
-      </button>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.span
+            key={silenced ? 'silenced' : 'active'}
+            initial={{ y: 10, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -10, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 360, damping: 22 }}
+            style={{ display: 'inline-block' }}
+          >
+            {silenced ? 'Silenced' : 'Silence 2 min'}
+          </motion.span>
+        </AnimatePresence>
+      </motion.button>
     </div>
   )
 }
