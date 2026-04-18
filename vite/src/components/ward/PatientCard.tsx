@@ -66,6 +66,7 @@ export function PatientCard({ patient }: Props) {
       onClick={onClick}
       aria-label={ariaLabel}
       className="ward-card"
+      data-patient-id={patient.patient_id}
       style={cardStyle}
     >
       {/* Bed diagram — top-down schematic on the left. Breath animation is
