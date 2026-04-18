@@ -9,9 +9,10 @@ Two modes:
 
 from __future__ import annotations
 
-import os
-import json
 import asyncio
+import contextlib
+import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -42,7 +43,7 @@ async def startup_event():
     global SCENARIO_DATA
     if os.environ.get("HAOMA_DEMO_MODE") == "1":
         if SCENARIO_PATH.exists():
-            with open(SCENARIO_PATH, "r", encoding="utf-8") as f:
+            with open(SCENARIO_PATH, encoding="utf-8") as f:
                 SCENARIO_DATA = json.load(f)
             print(f"MODE DÉMO : Scénario chargé en mémoire ({len(SCENARIO_DATA)} frames).")
         else:
@@ -73,10 +74,8 @@ async def ingest_observation(payload: dict[str, Any]):
     
     # On simule la recherche du code LOINC dans le payload FHIR
     loinc_code = "unknown"
-    try:
+    with contextlib.suppress(Exception):
         loinc_code = payload.get("code", {}).get("coding", [{}])[0].get("code", "unknown")
-    except Exception:
-        pass
 
     return {
         "status": "ingested", 
