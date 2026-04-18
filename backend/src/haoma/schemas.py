@@ -1,4 +1,4 @@
-"""Shared Pydantic schemas — the contract between simulator, features, model, xai, api.
+"""Shared Pydantic contracts — the interface between simulator, features, model, xai, api.
 
 Every data structure that crosses module boundaries lives here. Editing this file
 impacts all 3 devs — discuss before changing.
@@ -8,128 +8,68 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 AlertLevel = Literal["green", "orange", "red"]
-HaomaTrend = Literal["rising", "stable", "falling"]
 
 
-class VitalsFrame(BaseModel):
-    """Raw output of the patient simulator at one timestep."""
+class Vitals(BaseModel):
+    """Raw vitals snapshot at one timestep."""
 
-    heart_rate: float
+    timestamp: float
+    patient_id: str
+    hr: float
     spo2: float
-    bp_systolic: float
-    bp_diastolic: float
-    temp_central: float
-    temp_peripheral: float
-    perfusion_index: float
-    respiratory_rate: float
-    # Simulator ground-truths used as weak supervision for the PINN heads.
-    # Kept internal — not pushed to the frontend.
-    r_sim: float | None = None
-    q_sim: float | None = None
+    bp_sys: float
+    bp_dia: float
+    rr: float
+    t_central: float
+    t_periph: float
+    pi: float
+    rr_intervals: list[float] = Field(default_factory=list)
+    pleth_waveform: list[float] | None = None
 
 
-class FeatureVector(BaseModel):
+class Features(BaseModel):
     """The 4 features consumed by the PINN."""
 
     delta_t: float
-    hrv_trend_30min: float
-    pi_fc_ratio: float
-    degradation_slope_30min: float
+    hrv_trend: float
+    pi_hr_ratio: float
+    degradation_slope: float
 
 
-class PINNOutput(BaseModel):
-    """Predictions from the 3-head PINN."""
+class PhysicsOutputs(BaseModel):
+    """Physical quantities predicted by the PINN."""
 
-    resistance: float = Field(..., ge=0.0)
-    flow: float = Field(..., ge=0.0)
-    haoma_index: float = Field(..., ge=0.0, le=1.0)
+    resistance: float   # R̂
+    flow: float         # Q̂
 
 
 class ShapContribution(BaseModel):
-    """A feature's contribution to the Haoma Index, explained in plain French."""
+    """A feature's signed contribution to the Haoma Index, explained in French."""
 
     feature: str
     value: float
     label: str
 
 
-class PhysicsSummary(BaseModel):
-    """Physical quantities predicted by the model with percentage change from baseline."""
-
-    resistance: float
-    resistance_delta_pct: float
-    flow: float
-    flow_delta_pct: float
-
-
 class WebSocketFrame(BaseModel):
     """Full payload pushed to the frontend every 2-3 seconds."""
 
-    timestamp: str
+    timestamp: float
     patient_id: str
-    vitals: VitalsFrame
-    features: FeatureVector
-    physics: PhysicsSummary
+    vitals: Vitals
+    features: Features
+    physics: PhysicsOutputs
     haoma_index: float
-    haoma_trend: HaomaTrend
     alert_level: AlertLevel
     shap_contributions: list[ShapContribution]
-    recommendation: str
+    recommendation: str | None = None
 
 
-class ScenarioPatient(BaseModel):
-    age_years: int
-    weight_kg: float
-    pathology: str
-    baseline: dict[str, float]
+class DemoTimestep(WebSocketFrame):
+    """One timestep in the precomputed demo scenario file.
 
-
-class ScenarioPhase(BaseModel):
-    model_config = ConfigDict(extra="allow")
-
-    name: str
-    start_s: int
-    end_s: int
-    mode: Literal["stable", "degradation", "static"]
-
-
-class ScenarioTimeline(BaseModel):
-    model_config = ConfigDict(extra="allow")
-
-    total_seconds: int
-    sampling_hz: int
-    phases: list[ScenarioPhase]
-
-
-class ScenarioConfig(BaseModel):
-    """Typed contract for scenario JSON files in haoma/demo/scenarios/."""
-
-    scenario_id: str
-    description: str
-    seed: int
-    patient: ScenarioPatient
-    timeline: ScenarioTimeline
-    alert_thresholds: dict[str, float]
-
-
-class PrecomputedFrame(BaseModel):
-    """One timestep in a precomputed demo scenario file."""
-
-    t: float
-    vitals: VitalsFrame
-    features: FeatureVector
-    physics: PhysicsSummary
-    haoma_index: float
-    alert_level: AlertLevel
-    shap: list[ShapContribution]
-
-
-class PrecomputedScenario(BaseModel):
-    """Full precomputed scenario file — read by the API in demo mode."""
-
-    scenario_id: str
-    total_seconds: int
-    frames: list[PrecomputedFrame]
+    The precomputed scenario JSON is a list[DemoTimestep].
+    """

@@ -1,7 +1,6 @@
-"""Deterministic seeding — call set_seed() at the start of any stochastic pipeline.
+"""Deterministic seeding — call set_seed() once at the start of any stochastic pipeline.
 
-Without this, "fixed seed" is wishful thinking. The demo MUST replay identically every
-time the jury sees it.
+The demo MUST replay identically every time the jury sees it.
 """
 
 from __future__ import annotations
@@ -15,19 +14,17 @@ DEFAULT_SEED = 42
 
 
 def set_seed(seed: int = DEFAULT_SEED) -> None:
-    """Seed Python, NumPy, and PyTorch RNGs in one call.
-
-    Also sets PYTHONHASHSEED for child-process determinism.
-    """
+    """Seed Python, NumPy, and PyTorch RNGs in one call."""
     os.environ["PYTHONHASHSEED"] = str(seed)
     random.seed(seed)
     np.random.seed(seed)
-
     try:
         import torch
 
         torch.manual_seed(seed)
-        # PINN physics loss uses some non-deterministic CUDA ops; we stay on CPU,
-        # but leave deterministic_algorithms off to keep training fast.
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
     except ImportError:
         pass

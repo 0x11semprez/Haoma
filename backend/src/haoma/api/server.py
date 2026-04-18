@@ -1,9 +1,9 @@
-"""FastAPI entry point for the Haoma backend.
+"""FastAPI + WebSocket entry point.
 
-Run:  uvicorn haoma.api.main:app --reload --port 8000
+Run:  uvicorn haoma.api.server:app --reload --port 8000
 
 Two modes:
-  - default: live simulation + feature engine + PINN inference + SHAP
+  - default: live pipeline (simulator + features + PINN + SHAP)
   - HAOMA_DEMO_MODE=1: replays a pre-computed scenario file (zero live compute)
 """
 
@@ -39,6 +39,6 @@ def health() -> dict[str, str]:
     }
 
 
-# TODO Dev 3: implement
+# TODO Dev 3:
 #   - POST /observations  (FHIR-like Observation ingest with LOINC codes)
-#   - WebSocket /ws       (push full frames every 2-3s — see CLAUDE.md for payload schema)
+#   - WebSocket /ws       (push WebSocketFrame every 2-3s — see haoma.schemas)
