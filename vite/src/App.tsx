@@ -11,6 +11,7 @@ import { LandingPage } from './pages/Landing'
 import { LoginPage } from './pages/Login'
 import { WardPage } from './pages/Ward'
 import { PatientPage } from './pages/Patient'
+import { CriticalAlertBar } from './components/CriticalAlertBar'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { getSession } from '@/lib/api'
 
@@ -142,8 +143,20 @@ function RootLayout() {
             },
           }
 
+  // Banner lives OUTSIDE AnimatePresence — if it unmounts during the
+  // 260 ms route transition, the red bar blinks away mid-nav and the
+  // clinician reads that as "alarm cleared" (safety hazard). It must
+  // persist across routes and is only gated by auth + authenticated
+  // route type (no banner on Landing / Login — no ward context there).
+  const session = getSession()
+  const isAuthedRoute =
+    location.pathname === '/ward' || location.pathname.startsWith('/patient/')
+  const showBanner = session !== null && isAuthedRoute
+
   return (
     <>
+      {showBanner ? <CriticalAlertBar /> : null}
+
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
           key={location.pathname}
