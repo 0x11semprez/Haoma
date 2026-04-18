@@ -127,6 +127,26 @@ Thermal gradient (`features.delta_t`) is intentionally excluded — it belongs t
 
 **`divergence` rule:** set `active=True` iff `macro_vitals_state == "nominal"` AND `haoma_index >= 0.35`. When active, compute `lead_minutes` by scanning `projected_trajectory` for the first sample whose score ≥ 80 (critical threshold) and converting its `seconds_ahead` to minutes. `rationale` is an English one-liner — keep it medical, not marketing. When inactive, set all three fields to `False / None / None`.
 
+### SHAP labels — two strategies (pick one before the demo)
+
+The `shap_contributions[].label` field is what the jury actually reads. A feature name dump (`hrv_trend_30min`) is a pitch killer; a clinical phrase (*"Peripheral vasoconstriction · ΔT widened 2.3°C over 20 min"*) is the moment that sells the project. Two options — discuss with Dev 3 and the medical advisor before freezing:
+
+**Option A — Backend-owned static labels (simple, safe, default).**
+The `xai/` module owns a `feature → phrase` mapping validated by the medical advisor. Labels are short English clauses, invariant to the value magnitude. Frontend displays `label` verbatim.
+- Pros: one source of truth, frontend has zero clinical logic, trivial to review.
+- Cons: same phrase regardless of how large the effect is — the sentence doesn't "breathe" with the patient.
+- Implementation: a `haoma.xai.phrases.PHRASES: dict[str, str]` keyed on feature name, 8-12 entries, validated by the medical advisor. Pick the entry for the feature with the highest `|value|`.
+
+**Option B — Parametric phrases generated from value + vitals (ambitious).**
+The backend still sends a short `label`, but the frontend overrides it via a `lib/clinical.ts` dictionary of `(feature, value, vitals) → phrase`, producing sentences like *"ΔT widened to {vitals.temp_central − vitals.temp_peripheral}°C"* or *"HRV dropped {|value|·100}% over 30 min"*. The phrase updates frame-by-frame, giving the jury a "live diagnostic" feel.
+- Pros: wow factor — the explanation visibly tracks the physiology.
+- Cons: the medical advisor must validate every template (pediatric phrasing ≠ adult phrasing), and a template bug during the demo is a jury-visible error. Any numeric value rendered in a phrase must be rounded to one decimal and carry its unit.
+- Implementation: backend ships clean `value` and full `vitals` (already the case); frontend owns the phrasing dictionary. Backend still sets a sane fallback `label` so a missing dictionary entry degrades gracefully to Option A output.
+
+**Decision rule.** Start with Option A (30 min of work, zero risk). Upgrade to Option B only if (a) the phrases are all signed off by the medical advisor at least 24 h before the demo, and (b) the Option-A fallback is wired so an unknown feature never renders a template placeholder.
+
+**What the backend MUST NOT do either way:** do not hardcode values inside the label string server-side (e.g. *"ΔT widened to 2.3°C"*) — that couples the label to one frame. If the template is parametric, ship the raw value and let the frontend (Option B) or a fixed clause (Option A) handle rendering. That keeps a single timestamp of truth.
+
 ### Example `WebSocketFrame` (trimmed)
 
 ```json
