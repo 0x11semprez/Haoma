@@ -66,7 +66,7 @@ SIMULATION_HZ: Final[int] = 1
 DEMO_DURATION_S: Final[int] = 360      # ~6 min demo across 4 phases
 
 TRAINING: Final[dict[str, object]] = {
-    "n_stays": 1000,
+    "n_stays": 500,                         # hardware ceiling for 5-15 min CPU training
     "stay_duration_range": (7200, 21600),   # 2h-6h
     "stable_ratio": 0.35,
     "steepness_multiplier_range": (0.3, 1.5),

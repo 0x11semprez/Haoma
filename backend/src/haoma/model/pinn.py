@@ -1,7 +1,15 @@
 """3-head PINN — R̂ (resistance), Q̂ (flow), Haoma Index.
 
-Owner: Dev 2. Shared trunk uses Tanh or GELU (NOT ReLU — unstable with physics loss).
-See CLAUDE.md section "Modèle PINN (Dev 2) — 3 têtes (pas 4)".
+Owner: Dev 2.
+
+Shared trunk: 3 × Linear(64) with Tanh. ReLU is forbidden — it gives zero gradients on
+half its domain and physics-loss training pushes weights into regions where ReLU is dead.
+Tanh has gradients everywhere, critical when the physics and data losses pull in
+different directions.
+
+Bounding heads: sigmoid · (max - min) + min instead of softplus + clamp. Clamp kills
+gradients at the boundary (no error signal when R̂ hits the ceiling); the sigmoid
+formulation is naturally bounded with smooth gradients throughout.
 """
 
 from __future__ import annotations
@@ -12,39 +20,59 @@ from torch import nn
 from haoma.config import PHYSICS_RANGES, PINN_ARCHITECTURE
 
 
-class HaomaPINN(nn.Module):
-    """3 heads: R̂, Q̂, Haoma Index. No compliance head (cut per CLAUDE.md)."""
+class HaomaNet(nn.Module):
+    """3-head PINN. No compliance head — cut per CLAUDE.md non-negotiable."""
 
     def __init__(
         self,
         input_dim: int = int(PINN_ARCHITECTURE["input_dim"]),
         hidden_dim: int = int(PINN_ARCHITECTURE["hidden_dim"]),
-        n_hidden_layers: int = int(PINN_ARCHITECTURE["n_hidden_layers"]),
+        n_layers: int = int(PINN_ARCHITECTURE["n_hidden_layers"]),
     ) -> None:
         super().__init__()
-        activation_name = str(PINN_ARCHITECTURE["activation"])
-        activation_cls: type[nn.Module] = {"tanh": nn.Tanh, "gelu": nn.GELU}[activation_name]
 
-        trunk_layers: list[nn.Module] = [nn.Linear(input_dim, hidden_dim), activation_cls()]
-        for _ in range(n_hidden_layers - 1):
-            trunk_layers.extend([nn.Linear(hidden_dim, hidden_dim), activation_cls()])
-        self.trunk = nn.Sequential(*trunk_layers)
+        layers: list[nn.Module] = []
+        prev = input_dim
+        for _ in range(n_layers):
+            layers.append(nn.Linear(prev, hidden_dim))
+            layers.append(nn.Tanh())
+            prev = hidden_dim
+        self.shared = nn.Sequential(*layers)
 
-        self.head_r = nn.Linear(hidden_dim, 1)
-        self.head_q = nn.Linear(hidden_dim, 1)
-        self.head_index = nn.Linear(hidden_dim, 1)
+        self.head_R = nn.Linear(hidden_dim, 1)
+        self.head_Q = nn.Linear(hidden_dim, 1)
+        self.head_score = nn.Linear(hidden_dim, 1)
 
-    def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
-        z = self.trunk(x)
-        r = torch.clamp(
-            torch.nn.functional.softplus(self.head_r(z)).squeeze(-1),
-            PHYSICS_RANGES["R"]["min"],
-            PHYSICS_RANGES["R"]["max"],
-        )
-        q = torch.clamp(
-            torch.nn.functional.softplus(self.head_q(z)).squeeze(-1),
-            PHYSICS_RANGES["Q"]["min"],
-            PHYSICS_RANGES["Q"]["max"],
-        )
-        haoma_index = torch.sigmoid(self.head_index(z)).squeeze(-1)
-        return {"R": r, "Q": q, "haoma_index": haoma_index}
+        self._R_min = float(PHYSICS_RANGES["R"]["min"])
+        self._R_max = float(PHYSICS_RANGES["R"]["max"])
+        self._Q_min = float(PHYSICS_RANGES["Q"]["min"])
+        self._Q_max = float(PHYSICS_RANGES["Q"]["max"])
+
+    def forward(
+        self, x: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Forward pass.
+
+        Args:
+            x: (batch, input_dim) — z-normalized feature vector.
+
+        Returns:
+            R:     (batch, 1) — resistance,   bounded [R_min, R_max].
+            Q:     (batch, 1) — flow,         bounded [Q_min, Q_max].
+            score: (batch, 1) — Haoma Index, bounded [0, 1].
+        """
+        h = self.shared(x)
+        R = torch.sigmoid(self.head_R(h)) * (self._R_max - self._R_min) + self._R_min
+        Q = torch.sigmoid(self.head_Q(h)) * (self._Q_max - self._Q_min) + self._Q_min
+        score = torch.sigmoid(self.head_score(h))
+        return R, Q, score
+
+
+if __name__ == "__main__":
+    net = HaomaNet()
+    x = torch.randn(4, int(PINN_ARCHITECTURE["input_dim"]))
+    R, Q, s = net(x)
+    print(f"R: {R.shape} {R.flatten().tolist()}")
+    print(f"Q: {Q.shape} {Q.flatten().tolist()}")
+    print(f"score: {s.shape} {s.flatten().tolist()}")
+    print(f"params: {sum(p.numel() for p in net.parameters())}")
