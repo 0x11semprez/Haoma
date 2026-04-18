@@ -1,66 +1,46 @@
 # Haoma
 
-> Detecting microvascular collapse in critically ill children — **hours before vital signs show anything is wrong.**
+> Detecting vascular collapse in critically ill children — **hours before vital signs show anything is wrong.**
 
-Hackathon project — MIT Hacking Medicine Paris.
+## The problem
 
-## Problem
-
-In pediatric ICU, monitoring relies on macro-circulation: blood pressure, heart rate, SpO2. But cellular damage starts in the micro-circulation (capillaries), hours before the numbers on the monitor move. By the time vital signs react, it is too late.
+In pediatric ICU, doctors watch blood pressure, heart rate, and oxygen saturation. But by the time those numbers drop, the damage has already started — in the smallest blood vessels, where nothing is being measured.
 
 ## What Haoma does
 
-A Physics-Informed Neural Network (PINN) detects silent micro-vascular degradation from standard hospital monitoring data. It outputs:
+Haoma reads the data the monitor is already collecting and detects the silent warning signs of vascular collapse *before* the visible vitals react.
 
-- **R̂** — estimated peripheral vascular resistance
-- **Q̂** — estimated micro-vascular flow
-- **Haoma Index** — clinical risk score (0-1)
-- **SHAP explanations** — which features are driving the risk
+It gives the clinician three things:
 
-The PINN constrains physical outputs via Navier-Stokes-inspired loss terms, so the model's predictions stay physically coherent.
+- **A risk score** (0 to 1) that rises as the situation deteriorates.
+- **Physical quantities** (vascular resistance, capillary flow) that a doctor can interpret.
+- **A plain-language explanation** of *why* the score is rising.
 
-## Architecture
+It is a **decision-support tool**. Clinical judgment remains sovereign.
 
-```
-Scope data (sim) → FHIR-like API → Feature engine → PINN (3 heads) → SHAP → WebSocket → Dashboard
-```
+## How it works (in one sentence)
 
-- **Backend** — Python, FastAPI, PyTorch, SHAP
-- **Frontend** — React + Vite + Tailwind + Recharts (in `vite/`)
-- **Runtime** — CPU only (i7, 16 GB RAM, WSL). Model trained once, inference only during demo.
+A small AI model — constrained by the laws of fluid dynamics — learns to recognize the pattern of silent micro-vascular degradation from standard monitoring data.
 
-## Repository layout
+## Status
 
-```
-Haoma/
-├── CLAUDE.md      # Project-wide instructions (loaded in every Claude Code session)
-├── README.md      # You are here
-├── backend/       # Python backend — simulator, PINN, API, SHAP
-│   └── README.md  # Backend setup & usage
-└── vite/          # Frontend React app
-```
+Hackathon prototype (MIT Hacking Medicine Paris). Not a medical device.
 
-## Quick start
+## For developers
+
+Full project instructions are in [`CLAUDE.md`](CLAUDE.md). Quick start:
 
 ```bash
 # Backend
 cd backend
 ./scripts/setup.sh
 source .venv/bin/activate
-uvicorn haoma.api.main:app --reload
+pytest                   # must pass before coding
 
-# Frontend (separate terminal)
+# Frontend
 cd vite
 npm install
 npm run dev
 ```
 
-Full setup instructions: see [`backend/README.md`](backend/README.md).
-
-## Team
-
-Three developers and one medical advisor. Dev roles split across simulator / model / API+frontend — see `CLAUDE.md`.
-
-## Status
-
-Hackathon prototype. Not a medical device. Decision-support concept only — clinical judgment remains sovereign.
+See [`backend/README.md`](backend/README.md) and [`vite/CLAUDE.md`](vite/CLAUDE.md) for more.

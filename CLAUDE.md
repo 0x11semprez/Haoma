@@ -1,68 +1,71 @@
-# Haoma — Instructions Projet
+# Haoma — Project Instructions
 
-> ⚠️ **CLAUDE.md GLOBAL DU PROJET** — Ce fichier est automatiquement chargé dans TOUTE session Claude Code ouverte dans `/home/puppetmaster/Haoma/` ou un sous-dossier. Les 3 devs le partagent. Toute modification impacte l'équipe entière — en discuter avant d'éditer.
+> ⚠️ **PROJECT-WIDE CLAUDE.md** — Loaded automatically in every Claude Code session opened under `/home/puppetmaster/Haoma/` or any subdirectory. Shared by all 4 team members. Any change here impacts the whole team — discuss before editing.
 
-> Hackathon MIT Hacking Medicine Paris. Temps critique. Décisions figées ci-dessous : ne pas débattre les choix d'architecture, exécuter.
-
----
-
-## Projet en 2 phrases
-
-Haoma détecte la dégradation micro-vasculaire silencieuse chez l'enfant en réanimation, **des heures avant que les constantes vitales ne bougent**, via un modèle PINN (Physics-Informed Neural Network) branché sur les données du scope hospitalier. Cible jury : Pr. Bergounioux (neuro-pédiatre), Dr. Preka (néphro-pédiatrique), Dr. Sallette (biologiste).
-
-**Sentence pitch :** *"We detect microvascular collapse in critically ill children hours before vital signs show anything is wrong."*
+> MIT Hacking Medicine Paris hackathon. Time-critical. The decisions below are frozen — execute, do not debate architecture choices.
 
 ---
 
-## Équipe & répartition
+## The project in two sentences
 
-**3 développeurs + 1 médecin référent.**
+Haoma detects silent micro-vascular degradation in critically ill children **hours before vital signs move**, using a Physics-Informed Neural Network (PINN) fed by hospital monitoring data. Target jury: Pr. Bergounioux (pediatric neurology), Dr. Preka (pediatric nephrology), Dr. Sallette (diagnostic biology).
 
-| Rôle | Responsabilité |
+**Pitch sentence:** *"We detect microvascular collapse in critically ill children hours before vital signs show anything is wrong."*
+
+---
+
+## Team & roles
+
+**3 developers + 1 medical advisor.**
+
+| Role | Responsibility |
 |---|---|
-| **Dev 1** | Simulateur patient (étape 1) + moteur de features (étape 3) + génération du dataset + labels |
-| **Dev 2** | Modèle PINN (étape 4) + entraînement + SHAP pré-calculé (étape 5) |
-| **Dev 3** | FastAPI + WebSocket (étapes 2, 6) + Frontend React (`vite/`) + script de démo (étape 7) |
-| **Médecin** | Ne code pas. Calibre le simulateur (plages cliniquement réalistes, corrélations physiologiques), valide les seuils d'alerte (vert/orange/rouge), vérifie la cohérence clinique de SHAP, fournit le vocabulaire des recommandations, répond aux questions cliniques du jury. |
+| **Dev 1** | Patient simulator (step 1) + feature engine (step 3) + dataset generation + labels |
+| **Dev 2** | PINN model (step 4) + training + pre-computed SHAP (step 5) |
+| **Dev 3** | FastAPI + WebSocket (steps 2, 6) + React frontend (`vite/`) + demo orchestration (step 7) |
+| **Medical advisor** | Does not code. Calibrates the simulator (clinically realistic ranges, physiological correlations), validates alert thresholds (green/orange/red), reviews clinical coherence of SHAP explanations, provides recommendation vocabulary, answers clinical questions from the jury. |
 
-**Le témoignage médecin est pierre angulaire du pitch.** Une phrase du type *"en garde, si j'avais eu ce signal..."* change le ton de "projet hackathon" à "projet crédible devant un jury clinique".
+**The medical advisor's testimony is the backbone of the pitch.** A sentence like *"on call, if I had seen this signal..."* shifts the tone from "hackathon project" to "credible project before a clinical jury".
 
-**Chaque dev code sur sa propre machine.** Le dépôt Git est la source de vérité. Tout doit être reproductible par `./scripts/setup.sh` sans intervention manuelle.
+**Each developer codes on their own machine.** The Git repository is the source of truth. Everything must be reproducible via `./scripts/setup.sh` with no manual steps.
 
 ---
 
-## Arborescence
+## Repository layout
 
 ```
 Haoma/
-├── CLAUDE.md              (ce fichier — chargé automatiquement dans toute session)
-├── README.md              (présentation publique en anglais)
+├── CLAUDE.md              (this file — loaded in every Claude Code session)
+├── README.md              (public overview, simple English)
 ├── .gitignore
+├── .claude/               (shared Claude Code settings)
 ├── backend/
-│   ├── pyproject.toml     (dépendances Python — source de vérité)
-│   ├── README.md          (setup backend détaillé)
+│   ├── pyproject.toml     (pinned Python dependencies — source of truth)
+│   ├── README.md          (detailed backend setup)
 │   ├── scripts/
-│   │   ├── setup.sh            (crée .venv + installe tout)
-│   │   ├── train.sh            (entraîne le PINN — Dev 2)
-│   │   └── precompute_demo.sh  (pré-calcule un scénario — Dev 2 + Dev 3)
+│   │   ├── setup.sh            (creates .venv + installs everything)
+│   │   ├── train.sh            (trains the PINN — Dev 2)
+│   │   └── precompute_demo.sh  (pre-computes a scenario — Dev 2 + Dev 3)
 │   ├── src/haoma/
-│   │   ├── simulator/     (Dev 1 — patient synthétique, corrélations physio)
-│   │   ├── features/      (Dev 1 — delta-T, HRV, PI/FC, pente 30min)
-│   │   ├── model/         (Dev 2 — PINN PyTorch 3 têtes)
-│   │   ├── xai/           (Dev 2 — SHAP DeepExplainer pré-calculé)
+│   │   ├── simulator/     (Dev 1 — synthetic patient, physiological correlations)
+│   │   ├── features/      (Dev 1 — delta-T, HRV, PI/HR, 30-min slope)
+│   │   ├── model/         (Dev 2 — 3-head PyTorch PINN)
+│   │   ├── xai/           (Dev 2 — pre-computed SHAP DeepExplainer)
 │   │   ├── api/           (Dev 3 — FastAPI + WebSocket)
-│   │   └── demo/          (Dev 3 — orchestrateur + scénarios JSON)
+│   │   ├── demo/          (Dev 3 — orchestrator + scenario JSON)
+│   │   ├── schemas.py     (Pydantic contracts shared between modules)
+│   │   └── core/          (seed management, LOINC codes, shared utils)
 │   ├── tests/
-│   └── data/              (gitignoré — poids et pré-calcul regénérés localement)
+│   └── data/              (gitignored — weights and pre-computed scenarios)
 │       ├── weights/
 │       └── precomputed/
-└── vite/                  (Frontend React + Vite + Tailwind + Recharts)
+└── vite/                  (React + Vite + Tailwind + Recharts frontend)
     └── src/
 ```
 
-## Setup sur une nouvelle machine
+## Setup on a fresh machine
 
-**Pré-requis :** Python 3.11 ou 3.12 (**pas 3.13** — PyTorch), Node 20+, Git.
+**Prerequisites:** Python 3.11 or 3.12 (**not 3.13** — PyTorch), Node 20+, Git.
 
 ```bash
 git clone <repo> Haoma
@@ -70,119 +73,119 @@ cd Haoma
 
 # Backend
 cd backend
-./scripts/setup.sh           # crée .venv + installe tout
+./scripts/setup.sh           # creates .venv + installs everything
 source .venv/bin/activate
-pytest                       # smoke test — DOIT passer avant de coder
+pytest                       # smoke test — MUST pass before coding
 
-# Frontend (autre terminal)
+# Frontend (in another terminal)
 cd vite
 npm install
 npm run dev
 ```
 
-**Règle :** si `pytest` échoue au premier clonage, **arrêter et débugger le setup avant toute autre chose**. Ne pas accumuler des problèmes de setup sur du code buggy.
+**Rule:** if `pytest` fails on first clone, **stop and debug the setup before doing anything else**. Do not stack code problems on top of setup problems.
 
-**Fichiers jamais versionnés :**
-- `backend/.venv/` — environnement local
-- `backend/data/weights/` — poids PINN (régénérés par `./scripts/train.sh`)
-- `backend/data/precomputed/` — scénarios démo (régénérés par `./scripts/precompute_demo.sh`)
-- `.env*` — variables d'environnement
+**Never versioned:**
+- `backend/.venv/` — local environment
+- `backend/data/weights/` — PINN weights (regenerated by `./scripts/train.sh`)
+- `backend/data/precomputed/` — demo scenarios (regenerated by `./scripts/precompute_demo.sh`)
+- `.env*` — environment variables
 
-Si un dev a besoin des poids de quelqu'un d'autre pour aller vite : partager hors Git (Drive, scp). Jamais de commit.
+If a dev needs someone else's weights to move fast: share them outside Git (Drive, scp). Never commit.
 
-## Workflow Git — 3 devs sur machines différentes
+## Git workflow — 3 devs on different machines
 
-- **Branches par dev** : `dev1/simulator-features`, `dev2/pinn-xai`, `dev3/api-frontend-demo`
-- **main reste démobilisable** à tout moment — ne jamais pousser du code cassé sur main
-- **Merges** : rebase avant merge, pas de merge commit bruyant
-- **Commits** : un par feature fonctionnelle, message clair, pas de WIP mergé
-- **Avant un push** : `pytest` + `ruff check src tests` côté backend (les deux doivent passer)
-- **CLAUDE.md, README.md, pyproject.toml** sont partagés — prévenir l'équipe avant édition
-- **Claude Code génère souvent du code — relire avant commit**, ne pas commit en aveugle
-
----
-
-## Stack — figé, ne pas discuter
-
-- **Backend :** Python 3.11+, FastAPI, PyTorch, SHAP (DeepExplainer), Pydantic
-- **Frontend :** React + Vite (déjà en place), Tailwind CSS, Recharts, client WebSocket natif → **design system figé dans [`vite/CLAUDE.md`](vite/CLAUDE.md)** (typographie Instrument Serif + Lexend, palette IEC 60601-1-8, WCAG AAA, encodage dual alarm). À lire avant toute modification UI.
-- **Machine :** HP EliteBook i7, 16 Go RAM, **pas de GPU**, WSL Ubuntu
-- **Modèle :** Petit (3-4 couches, 64-128 neurones), entraîné UNE FOIS en amont, inférence seule à la démo
+- **Per-dev branches**: `dev1/simulator-features`, `dev2/pinn-xai`, `dev3/api-frontend-demo`
+- **main stays demoable** at all times — never push broken code to main
+- **Merges**: rebase before merging; no noisy merge commits
+- **Commits**: one per functional feature, clear message, no WIP merged
+- **Before pushing**: `pytest` + `ruff check src tests` on the backend (both must pass)
+- **`CLAUDE.md`, `README.md`, `pyproject.toml`, `schemas.py`** are shared — notify the team before editing
+- **Claude Code often generates code — review before committing**, never commit blind
 
 ---
 
-## Règles non-négociables (les piliers)
+## Stack — frozen, do not discuss
 
-1. **Cohérence physiologique** — Paramètres du simulateur INTERDÉPENDANTS. FC monte → HRV baisse. Vasoconstriction → delta-T se creuse ET PI chute simultanément. Jamais de paramètres générés indépendamment.
-2. **Valeurs pédiatriques** — Enfant ~4 ans : FC 80-120, TA systolique 90-110, SpO2 95-100, FR 20-30. Néonatal si track change : recalibrer, ne pas changer de projet.
-3. **Dégradation sigmoïde** — Longue compensation, puis bascule rapide. JAMAIS une rampe linéaire. Un score qui monte linéairement sent le synthétique à 10 mètres.
-4. **Contraintes physiques sur les SORTIES du réseau** — Les λ contraignent R̂, Q̂ prédits par le réseau, PAS des relations entre features d'entrée. C'est ce qui en fait un vrai PINN au sens de Raissi et al.
-5. **SHAP cliniquement cohérent** — Si le gradient thermique se creuse, SHAP DOIT le remonter comme contributeur principal. Un juré médical repère une explication incohérente en une seconde.
-6. **FHIR honnête** — Codes LOINC oui, structure inspirée FHIR oui, "HL7-ready" oui. PAS de faux FHIR prétendant à la conformité stricte. On dit "API façonnée sur le modèle FHIR Observation" et rien de plus.
-7. **Démo blindée** — Seed FIXE, scénario pré-calculé, zéro random entre runs, testée 10× minimum avant le jury, backup vidéo prêt.
+- **Backend:** Python 3.11+, FastAPI, PyTorch, SHAP (DeepExplainer), Pydantic
+- **Frontend:** React + Vite (already scaffolded), Tailwind CSS, Recharts, native WebSocket client → **design system frozen in [`vite/CLAUDE.md`](vite/CLAUDE.md)** (Instrument Serif + Lexend typography, IEC 60601-1-8 palette, WCAG AAA, dual-encoded alarms). Read before any UI change.
+- **Machine:** HP EliteBook i7, 16 GB RAM, **no GPU**, WSL Ubuntu
+- **Model:** Small (3-4 layers, 64-128 neurons), trained ONCE upfront, inference-only during the demo
 
 ---
 
-## Architecture technique — décisions figées
+## Non-negotiable rules (the pillars)
 
-### Simulateur (Dev 1)
+1. **Physiological coherence** — Simulator parameters are INTERDEPENDENT. HR rises → HRV drops. Vasoconstriction → delta-T widens AND PI drops simultaneously. Never generate parameters independently.
+2. **Pediatric values** — 4-year-old child: HR 80-120, systolic BP 90-110, SpO2 95-100, RR 20-30. If the track switches to neonatal: recalibrate, do not change projects.
+3. **Sigmoid degradation** — Long compensation, then fast collapse. NEVER a linear ramp. A score that climbs linearly from 0 to 1 screams "synthetic".
+4. **Physics constraints on the OUTPUTS of the network** — λ terms constrain R̂, Q̂ predicted by the network, NOT relations between input features. That's what makes this a real PINN in the Raissi et al. sense.
+5. **Clinically coherent SHAP** — If the thermal gradient widens, SHAP MUST surface it as a top contributor. A medical jury spots an incoherent explanation in one second.
+6. **Honest FHIR** — Real LOINC codes, yes. FHIR-inspired structure, yes. "HL7-ready", yes. NO fake FHIR pretending to strict conformance. We say "API modeled on FHIR Observation" and nothing more.
+7. **Rehearsed demo** — FIXED seed, pre-computed scenario, zero random between runs, rehearsed 10× minimum, backup video ready.
 
-Deux modes : `stable` / `degradation`. Paramètres générés chaque seconde, **corrélés entre eux** :
-- FC + intervalles R-R (pour HRV)
-- SpO2, TA sys/dia, T_centrale, T_périphérique, PI, FR
-- Pléthysmographie (forme d'onde brute)
-- **R_sim, Q_sim** à chaque pas de temps (nécessaires pour supervision faible du PINN)
+---
 
-Scénarios configurables via fichier JSON (âge, poids, pathologie, valeurs de base, moment/vitesse de dégradation). Code générique, scénario = config.
+## Technical architecture — frozen decisions
 
-### Pipeline FHIR-like (Dev 3)
+### Simulator (Dev 1)
 
-Service FastAPI qui reçoit les données et les expose. Chaque mesure est taggée avec son code LOINC :
-- FC → `8867-4` · SpO2 → `2708-6` · TA sys → `8480-6` · TA dia → `8462-4`
-- T_centrale → `8329-5` · T_périphérique → `8310-5` · PI → `61006-3` · FR → `9279-1`
+Two modes: `stable` / `degradation`. Parameters generated every second, **correlated with each other**:
+- HR + R-R intervals (for HRV)
+- SpO2, BP sys/dia, T_central, T_peripheral, PI, RR
+- Plethysmography (raw waveform)
+- **R_sim, Q_sim** at every timestep (required for weak supervision of the PINN)
 
-Buffer glissant 60 min en mémoire. Pas de vrai parseur FHIR, pas de HAPI. Juste la structure inspirée.
+Scenarios are configured via JSON (age, weight, pathology, baseline values, timing and speed of degradation). Generic code, scenario = config.
 
-### Features (Dev 1) — 4 features seulement
+### FHIR-like pipeline (Dev 3)
 
-1. **delta-T** = T_centrale − T_périphérique (vasoconstriction périphérique)
-2. **Tendance HRV** sur fenêtre glissante (pentes 5/10/30 min à partir des R-R)
-3. **Ratio PI/FC** (flux pulsatile capillaire normalisé)
-4. **Pente de dégradation 30 min** (dérivée temporelle agrégée)
+FastAPI service that ingests and exposes the data. Each measurement is tagged with its LOINC code:
+- HR → `8867-4` · SpO2 → `2708-6` · BP sys → `8480-6` · BP dia → `8462-4`
+- T_central → `8329-5` · T_peripheral → `8310-5` · PI → `61006-3` · RR → `9279-1`
 
-Les features 5 et 6 du spec original (temps hors plage, variabilité TA) sont coupées.
+60-minute rolling buffer in memory. No real FHIR parser, no HAPI. Just the inspired-by structure. **Codes live in `haoma/core/loinc.py` — single source of truth.**
 
-### Modèle PINN (Dev 2) — 3 têtes (pas 4)
+### Features (Dev 1) — 4 features only
 
-Architecture :
-- Couches partagées : 3-4 couches FC, 64-128 neurones, **Tanh ou GELU** (pas ReLU)
-- **Tête 1 : R̂** — résistance vasculaire périphérique (softplus + clamp [0.5, 5.0])
-- **Tête 2 : Q̂** — débit micro-vasculaire (softplus + clamp [0.1, 3.0])
-- **Tête 3 : Haoma Index** — score de risque clinique (sigmoïde, 0-1)
+1. **delta-T** = T_central − T_peripheral (peripheral vasoconstriction)
+2. **HRV trend** over a rolling window (slopes over 5/10/30 min from R-R intervals)
+3. **PI/HR ratio** (capillary pulsatile flow, heart-rate normalized)
+4. **30-min degradation slope** (aggregated temporal derivative)
 
-⚠️ Pas de tête compliance Ĉ — retirée pour simplifier la loss et éviter la tête la plus mal contrainte.
+Features 5 and 6 from the original spec (time-out-of-range, BP variability) are cut.
 
-**Loss composite :**
+### PINN model (Dev 2) — 3 heads (not 4)
+
+Architecture:
+- Shared layers: 3-4 fully-connected layers, 64-128 neurons, **Tanh or GELU** (not ReLU)
+- **Head 1: R̂** — peripheral vascular resistance (softplus + clamp [0.5, 5.0])
+- **Head 2: Q̂** — micro-vascular flow (softplus + clamp [0.1, 3.0])
+- **Head 3: Haoma Index** — clinical risk score (sigmoid, 0-1)
+
+⚠️ No compliance head Ĉ — cut to simplify the loss and drop the most weakly-constrained head.
+
+**Composite loss:**
 ```
-L_total = L_data + α × L_supervision + λ₁ × L_pression_débit + λ₂ × L_conservation
+L_total = L_data + α · L_supervision + λ₁ · L_pressure_flow + λ₂ · L_conservation
 ```
-- `L_data` = MSE(score_prédit, score_cible)
-- `L_supervision` = MSE(R̂, R_sim) + MSE(Q̂, Q_sim) — supervision faible depuis simulateur
-- `L_pression_débit` = (Q̂ − ΔP/R̂)²  — contrainte physique sur les sorties
-- `L_conservation` = pénalité sur incohérence temporelle de Q̂
+- `L_data` = MSE(predicted_score, target_score)
+- `L_supervision` = MSE(R̂, R_sim) + MSE(Q̂, Q_sim) — weak supervision from the simulator
+- `L_pressure_flow` = (Q̂ − ΔP/R̂)² — physical constraint on outputs
+- `L_conservation` = penalty on temporal incoherence of Q̂
 
-**Entraînement :** ~500-1000 séjours synthétiques, sur i7 CPU ≈ 5-15 min. Poids sauvegardés dans `backend/data/weights/`.
+**Training:** ~500-1000 synthetic patient trajectories, on i7 CPU ≈ 5-15 min. Weights saved in `backend/data/weights/`.
 
-### XAI — SHAP pré-calculé (Dev 2)
+### XAI — pre-computed SHAP (Dev 2)
 
-- `shap.DeepExplainer` sur la tête 3 (Haoma Index)
-- **Pré-calcul complet** : lancer le scénario de démo, calculer SHAP pour chaque point, sauvegarder dans `backend/data/precomputed/demo_scenario.json`
-- Pendant la démo : on LIT le fichier, on ne calcule pas. Zéro risque de lag.
-- **Interdit** : hardcoder à la main les valeurs pour "aider le narratif". SHAP doit vraiment tourner, juste en amont.
+- `shap.DeepExplainer` on head 3 (Haoma Index)
+- **Full pre-computation**: run the demo scenario, compute SHAP at every timestep, save to `backend/data/precomputed/demo_scenario.json`
+- During the demo: READ the file, do not compute. Zero lag risk.
+- **Forbidden**: manually hardcoding SHAP values to "help the narrative". SHAP must genuinely run, just upstream.
 
 ### WebSocket (Dev 3)
 
-Push toutes les 2-3s. Payload JSON :
+Push every 2-3 seconds. JSON payload — full schema in `haoma/schemas.py::WebSocketFrame`:
 ```json
 {
   "timestamp": "...", "patient_id": "...",
@@ -190,95 +193,95 @@ Push toutes les 2-3s. Payload JSON :
   "physics": { "resistance": 1.82, "flow": 0.61, ... },
   "haoma_index": 0.72, "alert_level": "orange",
   "shap_contributions": [
-    {"feature": "hrv_trend_30min", "value": 0.09, "label": "Chute de la variabilité cardiaque"}
+    {"feature": "hrv_trend_30min", "value": 0.09, "label": "Heart rate variability dropping"}
   ],
   "recommendation": "..."
 }
 ```
 
-### Script de démo (Dev 3) — 4 phases, ~6 min
+### Demo script (Dev 3) — 4 phases, ~6 min
 
-- **Phase 1 (~1.5 min)** — Patient stable. Haoma Index 0.10→0.25. Constantes vertes.
-- **Phase 2 (~2.5 min)** — Dérive silencieuse. Haoma Index 0.25→0.55. Constantes **encore vertes**. Moment "wow".
-- **Phase 3 (~1 min)** — Alerte imminente. Haoma Index 0.55→0.88. Constantes macro commencent ENFIN à bouger.
-- **Phase 4 (~1 min)** — ⚠️ **PAS de split-screen live**. Slide backup "ablation study : sans contraintes physiques, le modèle est bruyant et déclenche des faux positifs". Tableau de métriques comparatives uniquement.
-
----
-
-## Ce qu'on NE fait PAS
-
-- ❌ Pas de vrai parseur FHIR / serveur HAPI (perte de 3-4h pour zéro valeur démo)
-- ❌ Pas de tête compliance Ĉ
-- ❌ Pas de Phase 4 split-screen live (risque asymétrique trop élevé)
-- ❌ Pas de SHAP temps réel en démo (pré-calculé uniquement)
-- ❌ Pas de KernelExplainer (trop lent sans GPU)
-- ❌ Pas de ReLU dans le PINN (instable avec physics loss)
-- ❌ Pas de Next.js (overhead inutile pour une single-page dashboard)
-- ❌ Pas de random non-seedé
-- ❌ Pas de deployment cloud, Vercel, Docker — tout tourne en local pendant la démo
+- **Phase 1 (~1.5 min)** — Stable patient. Haoma Index 0.10→0.25. Vitals all green.
+- **Phase 2 (~2.5 min)** — Silent drift. Haoma Index 0.25→0.55. Vitals **still green**. The "wow" moment.
+- **Phase 3 (~1 min)** — Imminent alert. Haoma Index 0.55→0.88. Macro vitals finally start to move.
+- **Phase 4 (~1 min)** — ⚠️ **NO live split-screen**. Backup slide: "ablation study — without physics constraints the model is noisy and triggers false positives". Comparative metrics table only.
 
 ---
 
-## Règles de démo — critiques
+## What we do NOT do
 
-- **Seed fixe** dans tout le code (numpy, torch, python random)
-- Le backend de démo = lecteur du fichier `demo_scenario.json` pré-calculé, pas un simulateur live
-- Pas de race condition sur le WebSocket (tester la séquence dans l'ordre)
-- Pas de calcul qui bloque le front (toute opération > 50ms est interdite côté front)
-- **Backup** : screen recording du run parfait, prêt à lancer si le laptop meurt
-- **Testé 10 fois minimum** en conditions identiques à la démo jury
-
----
-
-## Pitch & réponses jury (à garder en tête en codant)
-
-- **"6 heures" dans le pitch visuel** : dire **"des heures avant"** plutôt que "6h" (littérature adulte septique, extrapolation pédiatrique)
-- **Etiometry** : à mentionner proactivement. "Eux font du macro, nous du micro, en amont dans la cascade physiopathologique."
-- **Circularité / apprentissage sur nos règles** : réponse apprise par cœur : *"En hackathon on valide l'architecture. En production, le label devient un outcome binaire (crash oui/non dans N heures), la métrique devient PR-AUC sur cohorte rétrospective."*
-- **Pourquoi PINN vs ML classique** : *"Le réseau prédit des grandeurs physiques (R̂, Q̂) et les contraintes de Navier-Stokes s'appliquent sur ces sorties. Le score partage les couches latentes avec ces grandeurs, donc il hérite de leur cohérence physique."*
-- **Jamais dire** "fiabilité médicale absolue". Toujours dire "support à la décision, le jugement clinique reste souverain".
+- ❌ No real FHIR parser / HAPI server (3-4h lost for zero demo value)
+- ❌ No compliance head Ĉ
+- ❌ No live Phase 4 split-screen (asymmetric risk too high)
+- ❌ No live SHAP during the demo (pre-computed only)
+- ❌ No KernelExplainer (too slow without GPU)
+- ❌ No ReLU in the PINN (unstable with physics loss)
+- ❌ No Next.js (useless overhead for a single-page dashboard)
+- ❌ No un-seeded random
+- ❌ No cloud deployment, Vercel, Docker — everything runs locally during the demo
 
 ---
 
-## Consignes diverses (du spec original, maintenues)
+## Demo rules — critical
 
-- Ne pas mentionner **Cerba**
-- Ne pas utiliser le terme **"jumeau numérique"** sauf si solidement ancré techniquement
-- Le **code est générique**, le **scénario est un fichier de configuration**
-- Si le track devient **néonatologie** : recalibrer les paramètres pédiatriques, pas changer de projet
-
----
-
-## Conventions de code
-
-- **Python** : type hints partout, Pydantic pour les schémas d'API, `ruff` pour le lint
-- **TypeScript** : strict mode, pas de `any` sauf justifié
-- **Commentaires** : seulement sur le POURQUOI non-évident (contraintes physiques, seuils cliniques, calibrations empiriques). Pas de commentaires qui répètent le code.
-- **Nommage** : variables en anglais dans le code, messages utilisateur en français
-- **Commits** : un par feature fonctionnelle, pas de WIP mergé
-- **Pas d'over-engineering** : c'est un hackathon, pas une V2. Hardcoder est OK quand c'est justifié.
+- **Fixed seed** everywhere (numpy, torch, python random) — via `haoma.core.set_seed()`
+- The demo-mode backend = reader of the pre-computed `demo_scenario.json` file, NOT a live simulator
+- No race conditions on the WebSocket (test the sequence in order)
+- No computation that blocks the frontend (any op > 50 ms on the UI thread is forbidden)
+- **Backup**: screen recording of a perfect run, ready to play if the laptop dies
+- **Rehearsed 10 times minimum** in conditions identical to the jury demo
 
 ---
 
-## Checklist avant démo
+## Pitch & jury answers (keep in mind while coding)
 
-- [ ] Poids PINN sauvegardés et rechargés proprement
-- [ ] Scénario démo pré-calculé présent localement sur la machine de démo
-- [ ] WebSocket ne perd pas de frame sur 6 min
-- [ ] Frontend reste fluide sur toute la durée
-- [ ] Les 3 niveaux d'alerte (vert/orange/rouge) se déclenchent aux bons moments
-- [ ] Les contributions SHAP sont cohérentes avec le scénario clinique (validé par le médecin)
-- [ ] Grandeurs physiques R̂ et Q̂ affichées en %-variation (plus lisible)
-- [ ] Backup vidéo prêt (screen recording d'un run parfait)
-- [ ] Métriques (matrice de confusion, PR-AUC, comparaison avec/sans contraintes) prêtes en slide backup
-- [ ] Démo répétée 10 fois minimum
-- [ ] Médecin briefé sur sa partie du pitch, réponses jury répétées
+- **"6 hours" in the visual pitch**: say **"hours before"** rather than "6 hours" precisely (adult septic literature, pediatric extrapolation)
+- **Etiometry**: mention proactively. *"They do macro-hemodynamics, we do micro — upstream in the pathophysiological cascade."*
+- **Circularity / training on our own rules**: memorized answer: *"In a hackathon we validate the architecture. In production the label becomes a binary outcome (did the patient crash within N hours?), the metric becomes PR-AUC on a retrospective cohort."*
+- **Why PINN vs classical ML**: *"The network predicts physical quantities (R̂, Q̂) and Navier-Stokes-inspired constraints apply to those outputs. The score shares the latent layers with these quantities, so it inherits their physical coherence."*
+- **Never say** "absolute medical reliability". Always say "decision support, clinical judgment remains sovereign".
 
-## Onboarding pour un nouveau dev (ordre de lecture)
+---
 
-1. `README.md` — comprendre le projet en 5 min
-2. Ce fichier (`CLAUDE.md`) — règles et décisions
-3. `backend/README.md` — setup technique
-4. Le module qu'il va toucher (Dev 1 / 2 / 3) — code + tests existants
+## Miscellaneous constraints (preserved from original spec)
 
-**Règle d'or :** si quelque chose n'est pas clair, demander à l'équipe avant de coder. Pas d'assumption silencieuse.
+- Do not mention **Cerba**
+- Do not use the term **"digital twin"** unless solidly grounded technically
+- **Code is generic**, **scenario is a config file**
+- If the track switches to **neonatology**: recalibrate pediatric values, do not change projects
+
+---
+
+## Coding conventions
+
+- **Python**: type hints everywhere, Pydantic for all API schemas, `ruff` for lint
+- **TypeScript**: strict mode, no `any` unless justified
+- **Comments**: only on non-obvious WHY (physical constraints, clinical thresholds, empirical calibrations). No comments that restate the code.
+- **Naming**: English variable names in code, French user-facing messages
+- **Commits**: one per functional feature, no WIP merged
+- **No over-engineering**: this is a hackathon, not a V2. Hardcoding is OK when justified.
+
+---
+
+## Pre-demo checklist
+
+- [ ] PINN weights saved and reload tested
+- [ ] Pre-computed scenario present locally on the demo machine
+- [ ] WebSocket does not drop a frame over 6 min
+- [ ] Frontend stays fluid for the full duration
+- [ ] The 3 alert levels (green/orange/red) fire at the right moments
+- [ ] SHAP contributions match the clinical scenario (validated by the medical advisor)
+- [ ] Physical quantities R̂ and Q̂ displayed as %-change (more readable)
+- [ ] Backup video ready (screen recording of a perfect run)
+- [ ] Backup metrics slides (confusion matrix, PR-AUC, with/without constraints) ready
+- [ ] Demo rehearsed 10 times minimum
+- [ ] Medical advisor briefed on their pitch segment, jury answers rehearsed
+
+## Onboarding for a new dev (reading order)
+
+1. `README.md` — understand the project in 5 minutes
+2. This file (`CLAUDE.md`) — rules and decisions
+3. `backend/README.md` — technical setup
+4. The module they will touch (Dev 1 / 2 / 3) — existing code + tests
+
+**Golden rule:** if something is unclear, ask the team before coding. No silent assumptions.
