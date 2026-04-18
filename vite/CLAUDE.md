@@ -12,6 +12,8 @@ This document defines the frontend design system. Any divergence must be justifi
 
 > Note: the product UI, this document, and all design guidance are in **English**. The project uses English-only for every string — labels, buttons, errors, aria-labels, tooltips. See the root `CLAUDE.md` "Coding conventions" for the strict rule.
 
+> 🔌 **Wiring the frontend to the real backend**: the routing contract, Vite proxy behavior, startup sequence, env vars, endpoint status, and frame schema sync rules all live in **root `CLAUDE.md` §Integration** — the single source of truth. This file (`vite/CLAUDE.md`) covers the design system; the integration test checklist for when the live backend comes online lives in §10 below.
+
 ---
 
 ## 1. Typefaces

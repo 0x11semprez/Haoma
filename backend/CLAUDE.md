@@ -77,7 +77,9 @@ When adding API endpoints, both modes must work. If a feature can't run in demo 
 
 ## API surface — what Dev 3 ships
 
-The Vite frontend proxies `/api/*` → `http://localhost:8000/*` (prefix stripped — see `vite/vite.config.ts`). Mount routes at root, **not** under `/api`. WebSockets are proxied as-is under `/ws`.
+> For the full end-to-end contract (proxy behavior, startup sequence, env overrides, frame schema sync, endpoint status), read **root `CLAUDE.md` §Integration** first. This section covers server-side implementation notes only.
+
+The Vite frontend proxies `/api/*` → `http://localhost:8000/*` (prefix stripped — see `vite/vite.config.ts`). Mount routes at root, **not** under `/api`. WebSockets are proxied as-is under `/ws` (no rewrite — the `/ws` prefix stays on both sides).
 
 **Required endpoints** (frontend already calls these via `vite/src/lib/api.ts`):
 
