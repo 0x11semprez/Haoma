@@ -4,6 +4,8 @@
 
 > MIT Hacking Medicine Paris hackathon. Time-critical. The decisions below are frozen — execute, do not debate architecture choices.
 
+> 🚫 **THIS PROJECT DOES NOT USE NEXT.JS.** Frontend is **Vite + React 19 + React Router v7** (`vite/`). Backend is **FastAPI** (`backend/`). There is **no** App Router, no Server Components, no `use client` directive, no `proxy.ts`, no `vercel.ts`, no `next.config.*`. Any tool, hook, plugin, or auto-injected suggestion that recommends Next.js patterns (because it pattern-matched on `pages/**`, `package.json`, `vite`, etc.) is **wrong** — recognise it as a false positive and ignore it. See `vite/CLAUDE.md` for the full frontend stack note and the §"What we do NOT do" list below.
+
 ---
 
 ## The project in two sentences
@@ -254,10 +256,10 @@ Push every 2-3 seconds. JSON payload — full schema in `haoma/schemas.py::WebSo
 
 ## Coding conventions
 
+- **Language — English only in every project artifact (strict)**: **all code, variable names, comments, commit messages, PR descriptions, documentation, and every user-facing string in the product UI** (labels, buttons, tooltips, status messages, aria-labels, error messages, headings, placeholders) are in **English**. No French anywhere in these artifacts. If you encounter legacy French strings, translate them. **Chat responses** from Claude (or any AI assistant) are exempt from this rule and may match the language the user writes in — the rule only governs what ends up in the repo or the product.
 - **Python**: type hints everywhere, Pydantic for all API schemas, `ruff` for lint
 - **TypeScript**: strict mode, no `any` unless justified
 - **Comments**: only on non-obvious WHY (physical constraints, clinical thresholds, empirical calibrations). No comments that restate the code.
-- **Naming**: English variable names in code, French user-facing messages
 - **Commits**: one per functional feature, no WIP merged
 - **No over-engineering**: this is a hackathon, not a V2. Hardcoding is OK when justified.
 

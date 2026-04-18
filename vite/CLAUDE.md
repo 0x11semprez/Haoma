@@ -4,9 +4,13 @@
 > Medical device Class IIa — CE marking in progress.
 > **Mandatory compliance: IEC 60601-1-8 (medical alarms), WCAG AAA, color-blind support.**
 
+> ⚠️ **Stack — read this before assuming anything**: this app is **Vite + React 19 + React Router v7 (data router) + Tailwind v4 + framer-motion**. It is **NOT Next.js**. The `src/pages/` folder is a plain organizational directory, **not** file-system routing — routes are declared in `src/App.tsx` via `createBrowserRouter`. There is no App Router, no Server Components, no `proxy.ts`, no `vercel.ts`. If a tool, hook, or plugin suggests Next.js patterns because it saw `pages/**`, it is wrong — ignore it and stay on Vite/React Router. The root `CLAUDE.md` forbids Next.js (❌ section, "useless overhead for a single-page dashboard").
+
+> 🚫 **Never run `npm run dev` (or any form of `vite`, `vite dev`, the dev server) from Claude.** The developer keeps their own dev server running locally and watches live reload — if the assistant launches one, it steals the port, spams their terminal, and breaks their workflow. This applies to foreground commands, background commands, and one-shot probes (e.g. `timeout 8 npm run dev` to "check it boots"). Validate changes with `npm run build` or `npm run lint` instead — those are short-lived and safe. If Claude ever thinks it needs to start the dev server to verify something, stop and report what needs to be checked in the browser so the developer can do it.
+
 This document defines the frontend design system. Any divergence must be justified and documented — clinical rules (alarm colors, dual encoding, motion) are **non-negotiable**.
 
-> Note: the product UI is in French. Interface labels quoted in this document remain in French. All design guidance and rationale is in English.
+> Note: the product UI, this document, and all design guidance are in **English**. The project uses English-only for every string — labels, buttons, errors, aria-labels, tooltips. See the root `CLAUDE.md` "Coding conventions" for the strict rule.
 
 ---
 
@@ -113,6 +117,24 @@ This document defines the frontend design system. Any divergence must be justifi
 3. **Never use red / amber / green / cyan** for anything other than the patient's clinical state.
 4. **Every screen must remain intelligible in grayscale** — ultimate test: applying `filter: grayscale(1)` must not lose any critical information.
 
+### 3.5 Interaction accent — primary CTAs
+
+Non-clinical accent tokens for primary call-to-action buttons (filled idle, hover shift, active depth). Kept strictly off IEC alarm colors so affordance never collides with clinical meaning.
+
+| Token | Hex (day) | Hex (night) | Usage |
+|---|---|---|---|
+| `--accent` | `#6F4FF2` | `#8B75F6` | Idle fill of primary CTAs |
+| `--accent-hover` | `#5B3FD9` | `#9E8BF8` | `:hover` fill |
+| `--accent-active` | `#4C34B8` | `#6F4FF2` | `:active` fill |
+| `--accent-ink` | `#FFFFFF` | `#0B0A08` | Text / icon on accent fill |
+
+Rules:
+1. Used **only** on primary CTA buttons (Enter, Sign out, Confirm…). Never on status indicators, text, non-CTA borders, or decoration.
+2. `:hover` adds a ~1 px lift (`translateY(-1px)`) and a subtle violet-tinted shadow.
+3. `:active` uses `scale(0.97)` + the deeper shade — press reads as depth, not highlight.
+4. `prefers-reduced-motion` MUST disable the lift and the scale. Color shifts may remain.
+5. Grayscale test still holds — scale + lift carry the state when hue is stripped.
+
 ---
 
 ## 4. Severity glyphs — dual encoding
@@ -167,9 +189,11 @@ Per IEC 60601-1-8:
 
 ## 6. Radii, dividers, shadows
 
-- `border-radius`: 3–4 px maximum. Never more — "scientific instrument" register.
+- **Surfaces** (cards, sections, containers): `border-radius` 3–4 px max, zero `box-shadow`, zero gradient. "Scientific instrument" register preserved here — non-negotiable.
+- **Primary CTAs** (Enter, Sign out, Confirm…): rounded rectangle (`border-radius: 8 px`), filled accent color (§3.5), 2 px ink-colored outline, hard offset shadow (`4px 4px 0 0 var(--ink)`) for tactile depth. `:hover` lifts the button (`translate(-2px, -2px)` + shadow grows to `6px 6px`); `:active` pushes it into the page (`translate(4px, 4px)` + shadow collapses to 0). This is the **only** place deep shadow and ink outlines are allowed.
+- **Icon / toggle buttons** (NightToggle, MuteToggle): 3 px radius, outlined, no fill — stays in instrument register.
 - Dividers: 1 px for internal separations, 2 px for alarm banners.
-- **Zero box-shadow, zero gradient** (with the exception of diagonal hatching used for watch-state safety encoding).
+- **Exception preserved**: diagonal hatching for "watch" state.
 - Diagonal hatching for "watch" state:
   ```css
   background: repeating-linear-gradient(
@@ -217,6 +241,12 @@ All views share the same colors, typefaces, glyphs, and alarm timings.
   --stable:        #166534;
   --stable-pale:   #D8E9DC;
 
+  /* ─── Interaction accent — primary CTAs (§3.5) ─────── */
+  --accent:        #6F4FF2;
+  --accent-hover:  #5B3FD9;
+  --accent-active: #4C34B8;
+  --accent-ink:    #FFFFFF;
+
   /* ─── Typography ──────────────────────────── */
   --serif: "Instrument Serif", "Iowan Old Style", Georgia, serif;
   --sans:  "Lexend", -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
@@ -238,6 +268,11 @@ body.night {
   --info-pale:     #083344;
   --stable:        #4ADE80;
   --stable-pale:   #052E16;
+
+  --accent:        #8B75F6;
+  --accent-hover:  #9E8BF8;
+  --accent-active: #6F4FF2;
+  --accent-ink:    #0B0A08;
 }
 
 html, body {
@@ -264,5 +299,46 @@ Every frontend PR must pass these checks before review:
 - [ ] `prefers-reduced-motion` respected
 - [ ] Night mode: alarms keep their original saturation
 - [ ] Typefaces limited to Instrument Serif + Lexend (no other family)
-- [ ] No `box-shadow`, no `border-radius` > 4 px
+- [ ] No `box-shadow` / gradient on surfaces (cards, sections). Primary CTA pill + subtle shadow is the only allowed exception (§3.5, §6)
+- [ ] `border-radius` ≤ 4 px on surfaces; 999 px (pill) allowed only on primary CTAs (§6)
 - [ ] `tabular-nums` active on every aligned numeric column
+- [ ] **No `HAOMA_MOCK` tag left in the tree** — mocks fully removed (§10)
+
+---
+
+## 10. Mocks — TEMPORARY scaffolding, MUST be removed before merge
+
+> ⚠️ **This whole section is about throwaway code.** It exists so Dev 3 can iterate on the UI before the FastAPI + WebSocket layer is wired. Any PR that ships `HAOMA_MOCK` to `main` is blocked.
+
+### How it works
+
+- All fake data and fake transports live in a **single file**: `src/lib/mocks.ts`.
+- The switch is an env flag: `VITE_USE_MOCKS=1` in `vite/.env.development.local` (never committed — `.env*` is gitignored at repo root).
+- `src/lib/api.ts` is the **only** consumer of `mocks.ts`. Every call site is annotated with the literal tag `HAOMA_MOCK` for grep-based cleanup.
+- UI components import from `@/lib/api` exactly as in production mode — no component should ever import from `@/lib/mocks` directly.
+
+### Enable locally
+
+```bash
+# vite/.env.development.local
+VITE_USE_MOCKS=1
+```
+
+Then `npm run dev`. Hit `/login`, scan the card (any tap succeeds), land on `/ward`. The featured patient `p-001` cycles green → orange → red in ~2.5 min via a sigmoid curve (CLAUDE.md pillar #3); the other 5 patients oscillate around their baseline so the ward keeps a visual mix of severities.
+
+### Removal checklist (RUN ALL BEFORE MERGE TO MAIN)
+
+- [ ] Delete `vite/src/lib/mocks.ts`
+- [ ] In `vite/src/lib/api.ts`, strip **every** line tagged `HAOMA_MOCK`, the `import { … USE_MOCKS } from './mocks'` block, and the banner comment at the top of the file
+- [ ] `cd vite && grep -r HAOMA_MOCK src` returns **nothing**
+- [ ] `cd vite && grep -r VITE_USE_MOCKS src .env*` returns **nothing**
+- [ ] `npm run build` passes with no unused-import errors
+- [ ] Delete this §10 from `vite/CLAUDE.md` and the `HAOMA_MOCK` bullet above in §9
+- [ ] Remove `vite/.env.development.local` if it only existed for the flag
+
+### Do NOT
+
+- Import `mocks.ts` from components, hooks, or pages — only `api.ts` may.
+- Add new mock fixtures outside `mocks.ts`. One file to delete.
+- Let mock strings diverge from the §1 English-only rule — the jury will see mocks during rehearsal.
+- Ship a mock on `main`, even behind a flag. The flag is a developer convenience, not a runtime feature.
