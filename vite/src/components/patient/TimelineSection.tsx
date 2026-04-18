@@ -22,6 +22,7 @@ export function TimelineSection({
         display: 'flex',
         flexDirection: 'column',
         gap: 16,
+        minWidth: 0,
       }}
     >
       <div
@@ -46,7 +47,7 @@ export function TimelineSection({
       {timeline.length === 0 ? (
         <div
           style={{
-            height: 220,
+            height: 'clamp(260px, 34vh, 320px)',
             border: '1px dashed var(--line)',
             borderRadius: 'var(--radius-card)',
             display: 'flex',

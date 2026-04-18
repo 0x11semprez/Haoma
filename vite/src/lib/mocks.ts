@@ -105,7 +105,24 @@ const WARD_PATIENTS: PatientSummary[] = [
 
 const HOSPITAL_NAME = "Children's Hospital of Philadelphia"
 const WARD_NAME = 'Pediatric Intensive Care Unit'
+const WARD_SHORT = 'PICU'
+const BAY = 'Bay B'
+const BEDS_TOTAL = 12
+const SHIFT_NAME = 'Day shift'
+const CHARGE_NURSE = 'L. Dumas, RN'
 const CLINICIAN_NAME = 'Dr. Elena Reyes'
+
+/** Demo day shift runs 07:00 → 19:00 local time. Both timestamps are
+ *  reconstructed on each call so the handoff countdown stays accurate
+ *  whenever the demo is rehearsed. */
+function shiftBounds(): { startIso: string; endIso: string } {
+  const now = new Date()
+  const start = new Date(now)
+  start.setHours(7, 0, 0, 0)
+  const end = new Date(now)
+  end.setHours(19, 0, 0, 0)
+  return { startIso: start.toISOString(), endIso: end.toISOString() }
+}
 
 const PATIENT_DETAILS: Record<string, PatientDetail> = Object.fromEntries(
   WARD_PATIENTS.map((p) => [
@@ -128,9 +145,18 @@ const PATIENT_DETAILS: Record<string, PatientDetail> = Object.fromEntries(
 
 export async function mockFetchWard(): Promise<WardSummary> {
   await delay(120)
+  const { startIso, endIso } = shiftBounds()
   return {
     hospital_name: HOSPITAL_NAME,
     ward_name: WARD_NAME,
+    ward_short: WARD_SHORT,
+    bay: BAY,
+    beds_total: BEDS_TOTAL,
+    shift_name: SHIFT_NAME,
+    shift_end_iso: endIso,
+    charge_nurse: CHARGE_NURSE,
+    monitoring_since_iso: startIso,
+    frames_dropped: 0,
     patients: WARD_PATIENTS.map((p) => ({ ...p })),
   }
 }

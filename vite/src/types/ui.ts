@@ -28,6 +28,16 @@ export interface PatientSummary {
 export interface WardSummary {
   hospital_name: string
   ward_name: string
+  /** Short codes and shift context surfaced in the TopBar. Optional so the
+   *  type still parses backend payloads that haven't been upgraded yet. */
+  ward_short?: string
+  bay?: string
+  beds_total?: number
+  shift_name?: string
+  shift_end_iso?: string
+  charge_nurse?: string
+  monitoring_since_iso?: string
+  frames_dropped?: number
   patients: PatientSummary[]
 }
 

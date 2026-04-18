@@ -7,15 +7,18 @@
  * We only render it, with a NOW marker and a distinct stroke so the
  * jury never confuses "observed" and "projected".
  *
- * Tooltip flags projected points explicitly — no guessing allowed.
+ * Severity thresholds (55 / 80) are drawn as thin horizontal lines in
+ * clinical colours rather than pale filled bands, which kept the chart
+ * legible but crushed the curve visually. The area fill is a neutral
+ * ink gradient (≤6% opacity) — no clinical hue, safe in grayscale.
  */
 
 import { useMemo } from 'react'
 import {
+  Area,
   CartesianGrid,
+  ComposedChart,
   Line,
-  LineChart,
-  ReferenceArea,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -46,6 +49,7 @@ interface ChartRow {
   alert_level?: AlertLevel
   timestamp?: string
   isProjected?: boolean
+  secondsFromNow?: number
 }
 
 interface TooltipLike {
@@ -59,6 +63,24 @@ function isChartRow(value: unknown): value is ChartRow {
   return typeof rec.index === 'number'
 }
 
+function formatClock(timestamp?: string, secondsFromNow?: number): string {
+  if (timestamp) {
+    const d = new Date(timestamp)
+    if (!Number.isNaN(d.getTime())) {
+      return d.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      })
+    }
+  }
+  if (typeof secondsFromNow === 'number') {
+    const mins = Math.round(secondsFromNow / 60)
+    return mins > 0 ? `+${mins} min` : 'now'
+  }
+  return ''
+}
+
 function ChartTooltip(props: unknown) {
   const { active, payload } = (props ?? {}) as TooltipLike
   if (!active || !payload || payload.length === 0) return null
@@ -70,6 +92,7 @@ function ChartTooltip(props: unknown) {
 
   const level: AlertLevel = raw.alert_level ?? levelFromScore(score)
   const s = severityOf(level)
+  const clock = formatClock(raw.timestamp, raw.secondsFromNow)
 
   return (
     <div
@@ -81,11 +104,26 @@ function ChartTooltip(props: unknown) {
         fontFamily: 'var(--sans)',
       }}
     >
+      {clock ? (
+        <div
+          className="uppercase tabular"
+          style={{
+            fontSize: 11,
+            fontWeight: 500,
+            letterSpacing: '0.22em',
+            color: 'var(--ink-soft)',
+            marginBottom: 4,
+          }}
+        >
+          {clock}
+          {raw.isProjected ? ' · projected' : ''}
+        </div>
+      ) : null}
       <div
         className="tabular"
         style={{
           fontFamily: 'var(--serif)',
-          fontSize: 28,
+          fontSize: 32,
           lineHeight: 1,
           color: raw.isProjected ? 'var(--ink-soft)' : 'var(--ink)',
           fontStyle: raw.isProjected ? 'italic' : 'normal',
@@ -101,13 +139,13 @@ function ChartTooltip(props: unknown) {
         <span
           className="uppercase"
           style={{
-            fontSize: 13,
+            fontSize: 12,
             fontWeight: 600,
             letterSpacing: '0.18em',
             color: s.colorVar,
           }}
         >
-          {raw.isProjected ? `${s.label} · PROJECTED` : s.label}
+          {s.label}
         </span>
       </div>
     </div>
@@ -115,18 +153,24 @@ function ChartTooltip(props: unknown) {
 }
 
 function levelFromScore(score: number): AlertLevel {
-  if (score >= 70) return 'red'
-  if (score >= 40) return 'orange'
+  if (score >= 80) return 'red'
+  if (score >= 55) return 'orange'
   return 'green'
 }
 
 const AXIS_TEXT = {
   fontFamily: 'var(--sans)',
-  fontSize: 13,
+  fontSize: 12,
   fill: 'var(--ink-soft)',
   letterSpacing: '0.18em',
   textTransform: 'uppercase' as const,
 }
+
+const THRESHOLD_LABEL = {
+  fontFamily: 'var(--sans)',
+  fontSize: 10,
+  letterSpacing: '0.22em',
+} as const
 
 export function ScoreTimeline({
   data,
@@ -144,24 +188,26 @@ export function ScoreTimeline({
       score: p.score,
       alert_level: p.alert_level,
       timestamp: p.timestamp,
+      secondsFromNow: (p.index - lastRealIndex) * intervalSeconds,
     }))
     if (projected.length > 0 && data.length > 0) {
       const last = data[data.length - 1]!
-      // Pivot: attach the dashed line to the last real sample.
       const pivotIndex = rows.findIndex((r) => r.index === last.index)
       if (pivotIndex >= 0) rows[pivotIndex]!.projected = last.score
       const samplesPerSecond = 1 / intervalSeconds
       for (const p of projected) {
         rows.push({
-          index: last.index + Math.round(p.seconds_ahead * samplesPerSecond),
+          index:
+            last.index + Math.round(p.seconds_ahead * samplesPerSecond),
           projected: p.score,
           isProjected: true,
+          secondsFromNow: p.seconds_ahead,
         })
       }
     }
     rows.sort((a, b) => a.index - b.index)
     return rows
-  }, [data, projected, intervalSeconds])
+  }, [data, projected, intervalSeconds, lastRealIndex])
 
   const formatX = (idx: number) => {
     const minutesOffset = ((idx - lastRealIndex) * intervalSeconds) / 60
@@ -171,37 +217,28 @@ export function ScoreTimeline({
   }
 
   return (
-    <div style={{ width: '100%', height: 240 }}>
+    <div
+      style={{
+        width: '100%',
+        height: 'clamp(260px, 34vh, 320px)',
+        minWidth: 0,
+      }}
+    >
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart
+        <ComposedChart
           data={combined}
-          margin={{ top: 8, right: 16, left: 0, bottom: 8 }}
+          margin={{ top: 16, right: 24, left: 8, bottom: 8 }}
         >
+          <defs>
+            <linearGradient id="haoma-score-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--ink)" stopOpacity={0.06} />
+              <stop offset="100%" stopColor="var(--ink)" stopOpacity={0} />
+            </linearGradient>
+          </defs>
           <CartesianGrid
             stroke="var(--line-soft)"
             vertical={false}
             strokeDasharray="0"
-          />
-          <ReferenceArea
-            y1={0}
-            y2={55}
-            fill="var(--stable-pale)"
-            fillOpacity={0.35}
-            ifOverflow="hidden"
-          />
-          <ReferenceArea
-            y1={55}
-            y2={80}
-            fill="var(--warning-pale)"
-            fillOpacity={0.35}
-            ifOverflow="hidden"
-          />
-          <ReferenceArea
-            y1={80}
-            y2={100}
-            fill="var(--critical-pale)"
-            fillOpacity={0.35}
-            ifOverflow="hidden"
           />
           <XAxis
             dataKey="index"
@@ -215,7 +252,8 @@ export function ScoreTimeline({
             stroke="var(--line)"
             tickLine={false}
             axisLine={{ stroke: 'var(--line)' }}
-            minTickGap={48}
+            minTickGap={56}
+            padding={{ left: 4, right: 4 }}
           />
           <YAxis
             domain={[0, 100]}
@@ -224,7 +262,33 @@ export function ScoreTimeline({
             stroke="var(--line)"
             tickLine={false}
             axisLine={{ stroke: 'var(--line)' }}
-            width={48}
+            width={36}
+          />
+          <ReferenceLine
+            y={55}
+            stroke="var(--warning)"
+            strokeDasharray="2 4"
+            strokeWidth={1}
+            ifOverflow="hidden"
+            label={{
+              value: 'WATCH',
+              position: 'right',
+              fill: 'var(--warning)',
+              ...THRESHOLD_LABEL,
+            }}
+          />
+          <ReferenceLine
+            y={80}
+            stroke="var(--critical)"
+            strokeDasharray="2 4"
+            strokeWidth={1}
+            ifOverflow="hidden"
+            label={{
+              value: 'CRITICAL',
+              position: 'right',
+              fill: 'var(--critical)',
+              ...THRESHOLD_LABEL,
+            }}
           />
           <Tooltip
             content={ChartTooltip}
@@ -246,14 +310,20 @@ export function ScoreTimeline({
               }}
             />
           ) : null}
-          <Line
+          <Area
             type="monotone"
             dataKey="score"
             stroke="var(--ink)"
             strokeWidth={2}
-            dot={false}
+            fill="url(#haoma-score-fill)"
             connectNulls={false}
             isAnimationActive={false}
+            activeDot={{
+              r: 4,
+              stroke: 'var(--bg)',
+              strokeWidth: 2,
+              fill: 'var(--ink)',
+            }}
           />
           <Line
             type="monotone"
@@ -265,7 +335,7 @@ export function ScoreTimeline({
             connectNulls={false}
             isAnimationActive={false}
           />
-        </LineChart>
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   )

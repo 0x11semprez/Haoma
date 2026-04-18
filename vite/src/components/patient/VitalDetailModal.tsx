@@ -68,7 +68,7 @@ export function VitalDetailModal({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
         onClick={onClose}
         aria-hidden="true"
       />
@@ -91,9 +91,9 @@ export function VitalDetailModal({
           exit={{ opacity: 0, scale: 0.98, y: 3 }}
           transition={{
             type: 'spring',
-            stiffness: 170,
-            damping: 30,
-            mass: 1,
+            stiffness: 240,
+            damping: 28,
+            mass: 0.9,
           }}
         >
           <header
