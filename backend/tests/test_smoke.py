@@ -101,14 +101,24 @@ def test_schemas_round_trip() -> None:
         haoma_index=output.haoma_index,
         haoma_trend="rising",
         alert_level="orange",
+        macro_vitals_state="nominal",
         shap_contributions=[
             {
                 "feature": "hrv_trend_30min",
                 "value": 0.09,
-                "label": "Chute de la variabilité cardiaque",
+                "label": "Heart rate variability dropping",
             }
         ],
-        recommendation="Contrôle gazométrique recommandé",
+        projected_trajectory=[
+            {"seconds_ahead": 0.0, "score": 72.0},
+            {"seconds_ahead": 600.0, "score": 84.0},
+        ],
+        divergence={
+            "active": True,
+            "lead_minutes": 18.0,
+            "rationale": "Haoma index rising while macro vitals remain nominal",
+        },
+        recommendation="Arterial blood gas check recommended",
     )
     # Round-trip through JSON
     reparsed = WebSocketFrame.model_validate_json(frame.model_dump_json())

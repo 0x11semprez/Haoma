@@ -31,6 +31,7 @@ import { PatientLoader, type LoaderStage } from '@/components/patient/PatientLoa
 import { ScoreBanner } from '@/components/patient/ScoreBanner'
 import { VitalsGrid } from '@/components/patient/VitalsGrid'
 import { WhyBand } from '@/components/patient/WhyBand'
+import { DivergenceBanner } from '@/components/patient/DivergenceBanner'
 import { FeaturesPanel } from '@/components/patient/FeaturesPanel'
 import { TimelineSection } from '@/components/patient/TimelineSection'
 import { useAlertSound } from '@/hooks/useAlertSound'
@@ -173,12 +174,22 @@ export function PatientPage() {
           >
             <PatientHeader patient={patient} frame={frame} wsStatus={wsStatus} />
             <div className="patient-bands">
-              <ScoreBanner frame={frame} />
-              <VitalsGrid frame={frame} />
-              <WhyBand frame={frame} />
+              <div className="patient-hero">
+                <div className="patient-hero__left">
+                  <WhyBand frame={frame} />
+                </div>
+                <div className="patient-hero__center">
+                  <ScoreBanner frame={frame} />
+                </div>
+                <div className="patient-hero__right">
+                  <VitalsGrid frame={frame} />
+                </div>
+              </div>
+              <DivergenceBanner frame={frame} />
               <FeaturesPanel frame={frame} />
               <TimelineSection
                 timeline={timeline}
+                projected={frame?.projected_trajectory ?? []}
                 intervalSeconds={WS_INTERVAL_SECONDS}
                 bufferSize={BUFFER_SIZE}
               />
@@ -192,7 +203,7 @@ export function PatientPage() {
 
 function BackArrow() {
   return (
-    <div style={{ padding: '16px 48px 0 48px' }}>
+    <div style={{ padding: '10px 48px 0 48px' }}>
       <motion.div
         whileHover={{ scale: 1.12, color: 'var(--ink)' }}
         whileTap={{ scale: 0.88 }}
@@ -237,9 +248,9 @@ function CenteredMessage({ text }: { text: string }) {
       className="flex items-center justify-center"
       style={{
         padding: '96px 48px',
-        fontFamily: 'var(--serif)',
-        fontStyle: 'italic',
-        fontSize: 28,
+        fontFamily: 'var(--sans)',
+        fontSize: 20,
+        fontWeight: 400,
         color: 'var(--ink-soft)',
       }}
     >

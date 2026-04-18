@@ -30,13 +30,22 @@ export function PatientLoader({ stage }: { stage: LoaderStage }) {
   const { titles, caption } = LOADER_COPY[stage]
   const [titleIndex, setTitleIndex] = useState(0)
 
+  // Reset to first title whenever the stage changes.
   useEffect(() => {
     setTitleIndex(0)
-    const id = window.setInterval(() => {
-      setTitleIndex((i) => (i + 1) % titles.length)
+  }, [stage])
+
+  // Schedule the next step only while we haven't reached the last title.
+  // The final title ("Thank you for waiting") is sticky — it's the last
+  // thing the jury reads before the dashboard paints, so it must not
+  // loop back to "Preparing patient" mid-demo.
+  useEffect(() => {
+    if (titleIndex >= titles.length - 1) return
+    const id = window.setTimeout(() => {
+      setTitleIndex((i) => i + 1)
     }, ROTATION_MS)
-    return () => window.clearInterval(id)
-  }, [stage, titles.length])
+    return () => window.clearTimeout(id)
+  }, [titleIndex, titles.length])
 
   const title = titles[titleIndex]
   return (
@@ -68,12 +77,11 @@ export function PatientLoader({ stage }: { stage: LoaderStage }) {
             style={{
               margin: 0,
               fontFamily: 'var(--serif)',
-              fontStyle: 'italic',
-              fontSize: 72,
+              fontSize: 54,
               fontWeight: 400,
-              letterSpacing: '-0.025em',
+              letterSpacing: '-0.02em',
               color: 'var(--ink)',
-              lineHeight: 1.02,
+              lineHeight: 1.05,
             }}
           >
             {title}

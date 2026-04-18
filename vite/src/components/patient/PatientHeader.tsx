@@ -19,14 +19,15 @@ export function PatientHeader({
   const waitingForFirstFrame = !frame && wsStatus !== 'error'
   return (
     <div
-      className="flex items-end justify-between"
       style={{
-        padding: '24px 48px',
-        borderBottom: '1px solid var(--line)',
-        gap: 48,
+        position: 'relative',
+        padding: '8px 48px 20px',
       }}
     >
-      <div className="flex flex-col" style={{ gap: 10 }}>
+      <div
+        className="flex flex-col items-center"
+        style={{ gap: 10, textAlign: 'center' }}
+      >
         <h1
           style={{
             margin: 0,
@@ -58,6 +59,9 @@ export function PatientHeader({
         <span
           className="uppercase"
           style={{
+            position: 'absolute',
+            right: 48,
+            bottom: 28,
             fontSize: 13,
             fontWeight: 500,
             letterSpacing: '0.18em',

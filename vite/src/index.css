@@ -207,47 +207,297 @@ body.night :focus-visible {
   outline-color: var(--ink);
 }
 
-/* ── Info hover — colour marker, no shadow ─────────────────────────
- * Simple hover: pale-accent background tint + border colour shift to
- * the accent hue. Zero box-shadow, zero scale, zero inset bar. Keeps
- * the clinical instrument register (§6 forbids shadows on surfaces).
- * Rows without their own border rely on the bg tint alone — still
- * clearly scannable. Each band gets a different hue so pointing at a
- * card tells you which section you are in. All hues are outside the
- * IEC palette (§3.4) so they cannot be read as clinical signals. */
-.info-hover {
-  transition: background-color 180ms ease, border-color 180ms ease;
+/* ── Patient card — unified shell for every panel in the hero
+ * (SHAP, Physics, Vitals, Recommendation). Idle state only: static
+ * border, no hover change, no outline. The ONLY hover cue is the
+ * framer-motion lift + scale on PatientCard.tsx. No color, no ring.
+ * Stays in the §6 "scientific instrument" register. */
+.patient-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--bg);
+  outline: none;
+  transition: transform 380ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
 }
-.info-hover:hover {
-  background: var(--line-soft);
-  border-color: var(--accent);
+.patient-card:hover,
+.patient-card:focus-visible {
+  outline: none;
+  border-color: var(--line);
+  transform: translateY(-8px) scale(1.04);
 }
-.info-hover--indigo:hover {
-  background: var(--accent-indigo-pale);
-  border-color: var(--accent-indigo);
+.patient-card:focus,
+.patient-card:focus-within {
+  outline: none;
+  border-color: var(--line);
 }
-.info-hover--rose:hover {
-  background: var(--accent-rose-pale);
-  border-color: var(--accent-rose);
-}
-.info-hover--slate:hover {
-  background: var(--accent-slate-pale);
-  border-color: var(--accent-slate);
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .info-hover,
-  .info-hover--indigo,
-  .info-hover--rose,
-  .info-hover--slate {
-    transition: background-color 120ms ease, border-color 120ms ease;
+  .patient-card {
+    transition: none;
+  }
+  .patient-card:hover,
+  .patient-card:focus-visible {
+    transform: none;
   }
 }
 
-/* Container that holds .info-hover rows needs overflow:hidden so the
- * hover background clips to the outer rounded corners. */
-.info-hover-group {
+/* Container holding internal rows needs overflow:hidden so dividers
+ * clip to rounded corners. Kept as a generic wrapper — no hover on it. */
+.patient-card--group {
   overflow: hidden;
+}
+
+/* ── Vital card — bedside-readable block (Band 2) ─────────────────────
+ * Large serif value, physiology-correlated trace at the bottom. The
+ * trace rests at 55% opacity and lifts to 100% on hover so focus is
+ * tactile without needing extra chrome. Clinical colors never appear
+ * here — tones come from §3.5 non-clinical accents (rose/indigo/slate).
+ */
+.vital-card {
+  cursor: pointer;
+  outline: none;
+  transition:
+    border-color 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 380ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+.vital-card__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.vital-card__trace {
+  margin-top: 18px;
+  height: 56px;
+  opacity: 0.5;
+  transition: opacity 380ms cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+/* Pronounced hover: 6 px lift + 1.2% scale + ink border. CSS-driven so
+ * :hover is re-evaluated the instant the modal curtain is removed from
+ * the DOM — hover restores without needing the pointer to move. */
+.vital-card:hover,
+.vital-card:focus-visible {
+  transform: translateY(-8px) scale(1.04);
+  border-color: var(--line);
+  outline: none;
+}
+.vital-card:active {
+  transform: translateY(-3px) scale(1.01);
+  transition-duration: 180ms;
+}
+.vital-card:hover .vital-card__trace,
+.vital-card:focus-visible .vital-card__trace {
+  opacity: 0.95;
+}
+
+/* ── Vital detail modal — fade + scale over a dimming curtain ────────
+ * The modal opens with opacity 0→1 and scale 0.96→1, centered in the
+ * viewport. No shared-layout morph from the grid card. No
+ * `backdrop-filter` on the curtain: a blur filter creates a heavy
+ * compositing layer the browser recomposes every frame during the
+ * exit, producing visible jank. A darker rgba gives the same reading
+ * cue at ~0 compositor cost. Backdrop clicks + ESC close; see
+ * VitalDetailModal.tsx. */
+.vital-curtain {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 18, 15, 0.74);
+  z-index: 60;
+}
+body.night .vital-curtain {
+  background: rgba(0, 0, 0, 0.82);
+}
+.vital-expanded-wrap {
+  position: fixed;
+  inset: 0;
+  z-index: 61;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.vital-expanded {
+  pointer-events: auto;
+  width: min(720px, 100%);
+  max-height: calc(100svh - 64px);
+  overflow: hidden;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 36px 40px 32px 40px;
+  position: relative;
+  /* Keep the open / close scale animation pivoting around the middle
+   * of the modal so it never drifts from viewport centre. */
+  transform-origin: 50% 50%;
+}
+.vital-expanded:focus {
+  outline: none;
+}
+
+/* ── Physiology traces — scrolling strip ──────────────────────────────
+ * SVG is 400×56 with 4 identical beats at 100px each. Animation shifts
+ * the whole group by one beat width per `animationDuration` (= 60/HR s),
+ * so the reset at cycle end is visually seamless (every offset lands on
+ * an identical beat).
+ */
+.physio-trace {
+  width: 100%;
+  height: 56px;
+  overflow: hidden;
+}
+.physio-trace--tall {
+  height: 120px;
+}
+.physio-trace__scroll {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.physio-trace__scroll--step {
+  animation-name: physio-ecg-scroll;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+@keyframes physio-ecg-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-25%); }
+}
+
+.physio-trace__pulse-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.physio-pulse-dot {
+  transform-origin: 24px 28px;
+  animation-name: physio-pulse-dot;
+  animation-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  animation-iteration-count: infinite;
+}
+@keyframes physio-pulse-dot {
+  0%   { transform: scale(0.7);  opacity: 0.55; }
+  18%  { transform: scale(1.18); opacity: 1;    }
+  42%  { transform: scale(0.9);  opacity: 0.8;  }
+  100% { transform: scale(0.7);  opacity: 0.55; }
+}
+
+/* ── Thermal gradient — static dual-marker ruler ──────────────────────
+ * No motion (thermal gradient drifts on minute-scale, not beat-scale).
+ * The gap between peripheral and central markers widens as delta-T
+ * grows — that widening is the whole point of the visualization.
+ * Neutral monochrome ramp; no IEC colors here. */
+.thermal-trace {
+  position: relative;
+  width: 100%;
+  height: 56px;
+}
+.thermal-trace__rail {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--line);
+  transform: translateY(-50%);
+  border-radius: 1px;
+}
+.thermal-trace__gap {
+  position: absolute;
+  top: 50%;
+  height: 2px;
+  background: var(--ink-soft);
+  transform: translateY(-50%);
+  border-radius: 1px;
+}
+.thermal-trace__mark {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px;
+  height: 10px;
+  background: var(--bg);
+  border: 1.5px solid var(--ink-soft);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.thermal-trace__mark > span {
+  position: absolute;
+  top: 16px;
+  font-family: var(--sans);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.thermal-trace__mark--periph {
+  border-color: var(--ink-muted);
+}
+.thermal-trace__mark--central {
+  background: var(--ink-soft);
+  border-color: var(--ink-soft);
+}
+
+.thermal-trace--tall {
+  height: 120px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .physio-trace__scroll--step,
+  .physio-pulse-dot {
+    animation: none !important;
+  }
+  .vital-card {
+    transition: border-color 120ms ease;
+  }
+  .vital-card:hover,
+  .vital-card:focus-visible,
+  .vital-card:active {
+    transform: none;
+  }
+  .vital-card__trace {
+    transition: opacity 120ms ease;
+  }
+}
+
+/* ── Credentials form inputs — underline-only, no box (§6) ──────────
+ * Used on the /login credentials view. Transparent background, single
+ * bottom border, thickens to --ink on focus. No outline ring, no fill. */
+.login-field {
+  width: 100%;
+  padding: 10px 2px;
+  font-family: var(--sans);
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  outline: none;
+  transition: border-color 180ms ease;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.login-field::placeholder {
+  color: var(--ink-muted);
+}
+.login-field:hover {
+  border-bottom-color: var(--ink-soft);
+}
+.login-field:focus {
+  border-bottom-color: var(--ink);
+}
+.login-field:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 /* ── Primary CTA — MetaMask-style neobrutalism (CLAUDE.md §3.5, §6) ─ */
@@ -597,11 +847,10 @@ body.night .enter-btn:hover {
   }
 }
 
-/* ── Patient bands: a vertical stack of 5 bands, each answering one
- * clinical question top-to-bottom. Replaces the previous 2-column grid
- * that left the score visually out-ranked by the right-hand vital
- * cards. Padding lives on the wrapper so every band inherits the same
- * horizontal rhythm. */
+/* ── Patient bands: outer vertical rhythm. Holds the 3-column "hero"
+ * at the top (why | score | vitals) then full-width bands below
+ * (divergence → features → timeline). Padding lives on the wrapper so
+ * every child inherits the same horizontal rhythm. */
 .patient-bands {
   display: flex;
   flex-direction: column;
@@ -609,33 +858,61 @@ body.night .enter-btn:hover {
   padding: 24px 48px 48px 48px;
 }
 
-/* Band 3 — contributing factors side by side with physics R̂/Q̂.
- * Below 1100px they stack. minmax(0, ...) prevents long SHAP labels
- * from pushing the panel past its track and forcing a horizontal
- * scrollbar. */
-.why-band {
+/* Patient hero — 3-column layout, clinical triage order left-to-right:
+ *   LEFT   WHY   (SHAP top-3 + R̂ / Q̂ — model's reasoning)
+ *   CENTER VERDICT (Haoma score, severity, gauge, recommendation)
+ *   RIGHT  WHAT (raw vitals — the fallback the clinician trusts)
+ *
+ * Under 1280 px the columns re-stack score → why → vitals so the score
+ * still leads. minmax(0, ...) prevents tall content from forcing a
+ * horizontal scrollbar. */
+.patient-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
-  gap: 24px;
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 32px;
+  align-items: stretch;
 }
-@media (max-width: 1100px) {
-  .why-band {
+.patient-hero__left,
+.patient-hero__right {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+/* Left + right column children expand to fill the column — the tallest
+ * column sets the track height, the others distribute their panels
+ * equally so neither side reads "empty". */
+.patient-hero__left > *,
+.patient-hero__right > * {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+/* Center column: the score floats to the vertical middle of the track
+ * (was floating at the top next to the taller vitals column). */
+.patient-hero__center {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+@media (max-width: 1280px) {
+  .patient-hero {
     grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
   }
+  .patient-hero__center { order: 0; }
+  .patient-hero__left   { order: 1; }
+  .patient-hero__right  { order: 2; }
 }
 
-/* Score banner — on narrow screens the 220 px score overflows the
- * recommendation column. Drop to a 2-row layout: score+severity on top,
- * recommendation full-width below. */
-@media (max-width: 900px) {
-  .score-banner {
-    grid-template-columns: auto 1fr !important;
-    grid-template-rows: auto auto;
-  }
-  .score-banner > :nth-child(3) {
-    grid-column: 1 / -1;
-  }
+/* Why column — SHAP above physics, always vertical stack in the hero's
+ * narrow left column. No side-by-side variant any more. */
+.why-band {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
 }
 
 /* ── Back arrow (Patient → Ward): icon-only, nudges left on hover ──── */

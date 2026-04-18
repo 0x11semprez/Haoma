@@ -1,3 +1,4 @@
+import { PatientCard } from '@/components/patient/PatientCard'
 import type { WebSocketFrame } from '@/types/api'
 
 const MINUS_SIGN = '\u2212'
@@ -24,7 +25,7 @@ export function PhysicsPanel({ frame }: { frame: WebSocketFrame | null }) {
     : 'var(--ink-soft)'
 
   return (
-    <section className="flex flex-col" style={{ gap: 16 }}>
+    <section className="flex flex-col" style={{ gap: 16, flex: 1 }}>
       <span
         className="uppercase"
         style={{
@@ -41,6 +42,7 @@ export function PhysicsPanel({ frame }: { frame: WebSocketFrame | null }) {
           display: 'grid',
           gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
           gap: 10,
+          flex: 1,
         }}
       >
         <PhysicsCell
@@ -82,11 +84,8 @@ function PhysicsCell({
     : '—'
 
   return (
-    <div
-      className="info-hover info-hover--indigo"
+    <PatientCard
       style={{
-        border: '1px solid var(--line)',
-        borderRadius: 'var(--radius-card)',
         padding: '16px 20px',
         display: 'flex',
         flexDirection: 'column',
@@ -135,6 +134,6 @@ function PhysicsCell({
       >
         {caption}
       </span>
-    </div>
+    </PatientCard>
   )
 }

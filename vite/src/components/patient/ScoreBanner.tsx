@@ -1,16 +1,24 @@
-import { AnimatePresence, motion } from 'framer-motion'
+import { useEffect, useRef, useState } from 'react'
+import { AnimatePresence, animate, motion, useReducedMotion } from 'framer-motion'
 import { SeverityTag } from '@/components/SeverityTag'
+import { PatientCard } from '@/components/patient/PatientCard'
 import type { WebSocketFrame } from '@/types/api'
 
 /**
- * Band 1 — "The verdict". Horizontal banner that lays the three pieces
- * a physician needs in the first glance:
- *   - the score (lead visual — 220px Instrument Serif)
- *   - the severity (IEC-coded chip + optional trend)
- *   - the recommendation (what to do now)
+ * Center column of the hero — "The verdict" stacked vertically:
+ *   1. Score digit (220 px Instrument Serif, smooth count-up)
+ *   2. Severity chip + trend word
+ *   3. Slim horizontal gauge
+ *   4. Recommendation card
  *
- * Degrades to em-dashes when `frame` is null so the layout never collapses
- * while the first WS payload is in flight.
+ * The divergence banner used to live inside this component; it now
+ * renders full-width under the hero via <DivergenceBanner/> so the
+ * "macro vitals nominal" headline can read across the whole viewport
+ * next to the green vitals on the right — that contrast *is* the
+ * Phase 2 narrative beat. Do not move it back.
+ *
+ * Degrades to em-dashes when `frame` is null so the layout never
+ * collapses while the first WS payload is in flight.
  */
 export function ScoreBanner({ frame }: { frame: WebSocketFrame | null }) {
   const score = frame ? Math.round(frame.haoma_index * 100) : null
@@ -31,55 +39,54 @@ export function ScoreBanner({ frame }: { frame: WebSocketFrame | null }) {
 
   return (
     <section
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'auto auto minmax(0, 1fr)',
-        alignItems: 'center',
-        gap: 48,
-        padding: '32px 0',
-        borderBottom: '1px solid var(--line)',
-      }}
-      className="score-banner"
+      className="flex flex-col items-center"
+      style={{ gap: 28, padding: '8px 0' }}
+      aria-label="Haoma score and clinical verdict"
     >
-      <div className="flex items-baseline" style={{ gap: 8 }}>
-        <span
-          className={`tabular ${pulseClass}`}
-          style={{
-            fontFamily: 'var(--serif)',
-            fontSize: 220,
-            fontWeight: 400,
-            lineHeight: 0.88,
-            letterSpacing: '-0.04em',
-            color: 'var(--ink)',
-          }}
-        >
-          {score !== null ? score : '—'}
-        </span>
-        <span
-          style={{
-            fontFamily: 'var(--serif)',
-            fontStyle: 'italic',
-            fontSize: 36,
-            fontWeight: 400,
-            color: 'var(--ink-soft)',
-            lineHeight: 1,
-          }}
-        >
-          / 100
-        </span>
-      </div>
-
-      <div className="flex flex-col" style={{ gap: 12 }}>
-        {frame ? <SeverityTag level={alertLevel} size="ward" /> : null}
-        {showTrend ? <TrendLine trend={frame.haoma_trend} /> : null}
-      </div>
-
       <div
+        className="flex flex-col items-center"
+        style={{ gap: 14 }}
+        role="img"
+        aria-label={
+          score !== null
+            ? `Haoma index ${score} out of 100`
+            : 'Haoma index pending'
+        }
+      >
+        <div className="flex items-baseline" style={{ gap: 8 }}>
+          <SmoothScoreNumber score={score} pulseClass={pulseClass} />
+          <span
+            aria-hidden="true"
+            style={{
+              fontFamily: 'var(--serif)',
+              fontStyle: 'italic',
+              fontSize: 36,
+              fontWeight: 400,
+              color: 'var(--ink-soft)',
+              lineHeight: 1,
+            }}
+          >
+            / 100
+          </span>
+        </div>
+
+        <div
+          className="flex items-center"
+          style={{ gap: 16, justifyContent: 'center' }}
+        >
+          {frame ? <SeverityTag level={alertLevel} size="ward" /> : null}
+          {showTrend ? <TrendLine trend={frame.haoma_trend} /> : null}
+        </div>
+
+        <ScoreGauge score={score} alertLevel={alertLevel} />
+      </div>
+
+      <PatientCard
         style={{
-          border: '1px solid var(--line)',
-          borderRadius: 'var(--radius-card)',
           padding: '20px 24px',
           minWidth: 0,
+          width: '100%',
+          maxWidth: 520,
         }}
       >
         <span
@@ -96,48 +103,145 @@ export function ScoreBanner({ frame }: { frame: WebSocketFrame | null }) {
         <AnimatePresence mode="wait" initial={false}>
           <motion.p
             key={recommendation}
+            role="status"
+            aria-live="polite"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
             style={{
-              fontFamily: 'var(--serif)',
-              fontStyle: 'italic',
-              fontSize: 24,
+              fontFamily: 'var(--sans)',
+              fontSize: 18,
               fontWeight: 400,
               color: 'var(--ink)',
               marginTop: 10,
               marginBottom: 0,
-              lineHeight: 1.35,
+              lineHeight: 1.45,
             }}
           >
             {recommendation}
           </motion.p>
         </AnimatePresence>
-      </div>
+      </PatientCard>
     </section>
   )
 }
 
-function TrendLine({ trend }: { trend: WebSocketFrame['haoma_trend'] }) {
-  const text =
-    trend === 'rising'
-      ? '↑ worsening'
-      : trend === 'falling'
-        ? '↓ improving'
-        : '→ stable'
+/* ── Score digit with smooth tween on value change ─────────────────── */
+
+function SmoothScoreNumber({
+  score,
+  pulseClass,
+}: {
+  score: number | null
+  pulseClass: string
+}) {
+  const reduced = useReducedMotion()
+  const [display, setDisplay] = useState<number>(score ?? 0)
+  const previousRef = useRef<number>(score ?? 0)
+
+  useEffect(() => {
+    if (score === null) return
+    const from = previousRef.current
+    previousRef.current = score
+    if (reduced || from === score) {
+      setDisplay(score)
+      return
+    }
+    const controls = animate(from, score, {
+      duration: 0.9,
+      ease: [0.22, 1, 0.36, 1],
+      onUpdate: (v) => setDisplay(Math.round(v)),
+    })
+    return () => controls.stop()
+  }, [score, reduced])
+
   return (
     <span
+      className={`tabular ${pulseClass}`}
+      aria-hidden="true"
       style={{
         fontFamily: 'var(--serif)',
-        fontStyle: 'italic',
-        fontSize: 24,
+        fontSize: 220,
         fontWeight: 400,
+        lineHeight: 0.88,
+        letterSpacing: '-0.04em',
+        color: 'var(--ink)',
+      }}
+    >
+      {score !== null ? display : '—'}
+    </span>
+  )
+}
+
+/* ── Slim horizontal gauge under the severity chip ─────────────────── */
+
+function ScoreGauge({
+  score,
+  alertLevel,
+}: {
+  score: number | null
+  alertLevel: WebSocketFrame['alert_level']
+}) {
+  const reduced = useReducedMotion()
+  const color =
+    alertLevel === 'red'
+      ? 'var(--critical)'
+      : alertLevel === 'orange'
+        ? 'var(--warning)'
+        : 'var(--stable)'
+  const pct = score ?? 0
+
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        width: '100%',
+        maxWidth: 340,
+        height: 6,
+        background: 'var(--line-soft)',
+        borderRadius: 3,
+        overflow: 'hidden',
+      }}
+    >
+      <motion.div
+        initial={false}
+        animate={{ width: `${pct}%` }}
+        transition={{
+          duration: reduced ? 0 : 0.9,
+          ease: [0.22, 1, 0.36, 1],
+        }}
+        style={{
+          height: '100%',
+          background: color,
+          transition: 'background-color 0.6s ease',
+        }}
+      />
+    </div>
+  )
+}
+
+function TrendLine({ trend }: { trend: WebSocketFrame['haoma_trend'] }) {
+  const { arrow, word } =
+    trend === 'rising'
+      ? { arrow: '↑', word: 'worsening' }
+      : trend === 'falling'
+        ? { arrow: '↓', word: 'improving' }
+        : { arrow: '→', word: 'stable' }
+  return (
+    <span
+      aria-label={`Trend: ${word}`}
+      style={{
+        fontFamily: 'var(--sans)',
+        fontSize: 16,
+        fontWeight: 500,
+        letterSpacing: '0.04em',
         color: 'var(--ink-soft)',
         lineHeight: 1.2,
       }}
     >
-      {text}
+      <span aria-hidden="true">{arrow} </span>
+      {word}
     </span>
   )
 }

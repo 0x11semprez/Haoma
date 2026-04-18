@@ -1,7 +1,8 @@
 /**
- * Live WebSocket connection status — triple-encoded (glyph + text + color).
- * "open" is the only state that uses the stable green signal; all non-open
- * states stay on the neutral/critical palette to avoid false reassurance.
+ * Live WebSocket connection status — glyph + text + color.
+ * "open" is intentionally minimal: a plain LIVE label in ink, no glyph,
+ * so the nominal state fades into the instrument register. Degraded
+ * states keep their glyph to stay noticeable.
  */
 
 import { Glyph } from '@/components/Glyph'
@@ -13,7 +14,7 @@ interface Props {
 
 type ChipSpec = {
   label: string
-  shape: 'circle-filled' | 'circle-hollow' | 'triangle'
+  shape: 'circle-filled' | 'circle-hollow' | 'triangle' | null
   color: string
   pulse: '' | 'pulse-high' | 'pulse-med'
 }
@@ -33,8 +34,8 @@ const SPECS: Record<WsStatus, ChipSpec> = {
   },
   open: {
     label: 'LIVE',
-    shape: 'circle-filled',
-    color: 'var(--stable)',
+    shape: null,
+    color: 'var(--ink-soft)',
     pulse: '',
   },
   closed: {
@@ -63,12 +64,14 @@ export function ConnectionChip({ status }: Props) {
         borderRadius: 3,
       }}
     >
-      <Glyph
-        shape={spec.shape}
-        size="inline"
-        color={spec.color}
-        pulseClass={spec.pulse}
-      />
+      {spec.shape ? (
+        <Glyph
+          shape={spec.shape}
+          size="inline"
+          color={spec.color}
+          pulseClass={spec.pulse}
+        />
+      ) : null}
       <span
         className="uppercase"
         style={{

@@ -17,7 +17,14 @@
  * changes, these fixtures drift — they are not a source of truth.
  */
 
-import type { AlertLevel, WebSocketFrame } from '@/types/api'
+import type {
+  AlertLevel,
+  DivergenceSignal,
+  MacroVitalsState,
+  ProjectedPoint,
+  VitalsFrame,
+  WebSocketFrame,
+} from '@/types/api'
 import type {
   AuthSession,
   PatientDetail,
@@ -135,10 +142,10 @@ export async function mockFetchPatient(id: string): Promise<PatientDetail> {
   return { ...detail }
 }
 
-export async function mockAuthenticate(_badgeId: string): Promise<AuthSession> {
+export async function mockAuthenticate(badgeId: string): Promise<AuthSession> {
   await delay(220)
   const session: AuthSession = {
-    token: 'mock-token',
+    token: `mock-token-${badgeId || 'anon'}`,
     clinician_name: CLINICIAN_NAME,
     role: 'attending',
     expires_at: new Date(Date.now() + 8 * 3600 * 1000).toISOString(),
@@ -220,6 +227,84 @@ function levelFor(hi: number): AlertLevel {
   return 'green'
 }
 
+function offsetFor(patientId: string): number {
+  if (patientId === 'p-001') return 0
+  if (patientId === 'p-002') return 20
+  if (patientId === 'p-003') return 40
+  return 60 + Number.parseInt(patientId.slice(-1), 10)
+}
+
+/** Shared hi generator so the projection is consistent with the live curve. */
+function haomaAt(summary: PatientSummary, step: number): number {
+  if (summary.patient_id === 'p-001') {
+    return clamp(0.12 + progress(step, 0) * 0.78, 0, 1)
+  }
+  const offset = offsetFor(summary.patient_id)
+  return clamp(
+    summary.haoma_index + Math.sin((step + offset) / 6) * 0.04,
+    0,
+    1,
+  )
+}
+
+/**
+ * Pediatric normal ranges for a 4-year-old — root CLAUDE.md §Pillars.
+ * Used to classify the "macro" view of the patient so the frontend doesn't
+ * re-derive clinical logic. Only the four vitals the physician would glance
+ * at first are scored; temperature gradient lives in the features block.
+ */
+function classifyMacro(v: VitalsFrame): MacroVitalsState {
+  let out = 0
+  if (v.heart_rate < 80 || v.heart_rate > 120) out += 1
+  if (v.spo2 < 95) out += 1
+  if (v.bp_systolic < 90 || v.bp_systolic > 110) out += 1
+  if (v.respiratory_rate < 20 || v.respiratory_rate > 30) out += 1
+  if (out === 0) return 'nominal'
+  if (out <= 2) return 'borderline'
+  return 'abnormal'
+}
+
+/** The Phase 2 moment — active when the macro view is still nominal
+ *  but the micro-score is already drifting. The real PINN will emit this;
+ *  the mock derives it from the same sigmoid that drives the live curve.
+ */
+function divergenceFrom(
+  macro: MacroVitalsState,
+  hi: number,
+  trajectory: ProjectedPoint[],
+): DivergenceSignal {
+  if (macro !== 'nominal' || hi < 0.35) {
+    return { active: false, lead_minutes: null, rationale: null }
+  }
+  const criticalPoint = trajectory.find((p) => p.score >= 80)
+  return {
+    active: true,
+    lead_minutes: criticalPoint ? criticalPoint.seconds_ahead / 60 : null,
+    rationale:
+      'Macro vitals still within pediatric range while the micro-score climbs — vascular reserve is being consumed silently.',
+  }
+}
+
+/** Forward risk trajectory — sampled from the same deterministic generator
+ *  so the projected line joins the historical line seamlessly. Horizon is
+ *  expressed in seconds; the frontend re-emits it on its x-axis.
+ */
+function projectTrajectory(
+  summary: PatientSummary,
+  step: number,
+  horizonFrames: number,
+  intervalSeconds: number,
+): ProjectedPoint[] {
+  const out: ProjectedPoint[] = []
+  for (let k = 1; k <= horizonFrames; k++) {
+    out.push({
+      seconds_ahead: k * intervalSeconds,
+      score: haomaAt(summary, step + k) * 100,
+    })
+  }
+  return out
+}
+
 /**
  * Backend PINN output bounds, mirrored exactly from root CLAUDE.md
  * §Technical architecture > PINN model:
@@ -243,24 +328,7 @@ const R_BASELINE = 1.2
 const Q_BASELINE = 1.4
 
 function makeFrame(summary: PatientSummary, step: number): WebSocketFrame {
-  const baseHi = summary.haoma_index
-  const offset =
-    summary.patient_id === 'p-001'
-      ? 0
-      : summary.patient_id === 'p-002'
-        ? 20
-        : summary.patient_id === 'p-003'
-          ? 40
-          : 60 + Number.parseInt(summary.patient_id.slice(-1), 10)
-
-  // Featured patient (p-001) uses the full sigmoid; others oscillate
-  // tightly around their baseline so the ward view stays visually mixed.
-  // Haoma index is bounded [0, 1] exactly like the sigmoid-headed PINN.
-  const hi =
-    summary.patient_id === 'p-001'
-      ? clamp(0.12 + progress(step, 0) * 0.78, 0, 1)
-      : clamp(baseHi + Math.sin((step + offset) / 6) * 0.04, 0, 1)
-
+  const hi = haomaAt(summary, step)
   const alert = levelFor(hi)
 
   // Correlated physiology — HR up, HRV down, ΔT widens, PI drops with hi.
@@ -290,19 +358,30 @@ function makeFrame(summary: PatientSummary, step: number): WebSocketFrame {
   const trend =
     hi - prev > 0.004 ? 'rising' : hi - prev < -0.004 ? 'falling' : 'stable'
 
+  const vitals: VitalsFrame = {
+    heart_rate: hr,
+    spo2,
+    bp_systolic: bpSys,
+    bp_diastolic: bpDia,
+    temp_central: tCentral,
+    temp_peripheral: tPeripheral,
+    perfusion_index: pi,
+    respiratory_rate: rr,
+  }
+
+  const macroState = classifyMacro(vitals)
+  const projected = projectTrajectory(
+    summary,
+    step,
+    PROJECTION_HORIZON_FRAMES,
+    FRAME_INTERVAL_MS / 1000,
+  )
+  const divergence = divergenceFrom(macroState, hi, projected)
+
   return {
     timestamp: new Date().toISOString(),
     patient_id: summary.patient_id,
-    vitals: {
-      heart_rate: hr,
-      spo2,
-      bp_systolic: bpSys,
-      bp_diastolic: bpDia,
-      temp_central: tCentral,
-      temp_peripheral: tPeripheral,
-      perfusion_index: pi,
-      respiratory_rate: rr,
-    },
+    vitals,
     features: {
       delta_t: deltaT,
       hrv_trend_30min: hrvTrend,
@@ -318,10 +397,17 @@ function makeFrame(summary: PatientSummary, step: number): WebSocketFrame {
     haoma_index: hi,
     haoma_trend: trend,
     alert_level: alert,
+    macro_vitals_state: macroState,
     shap_contributions: shapFor(alert),
+    projected_trajectory: projected,
+    divergence,
     recommendation: recommendationFor(alert),
   }
 }
+
+// 30 frames × 2s = 60s of forward look-ahead. Enough to show the steep
+// section of the sigmoid without overrunning the visible window on the chart.
+const PROJECTION_HORIZON_FRAMES = 30
 
 const previousHi = new Map<string, number>()
 

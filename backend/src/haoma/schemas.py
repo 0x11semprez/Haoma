@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 AlertLevel = Literal["green", "orange", "red"]
 HaomaTrend = Literal["rising", "stable", "falling"]
+MacroVitalsState = Literal["nominal", "borderline", "abnormal"]
 
 
 class VitalsFrame(BaseModel):
@@ -65,6 +66,29 @@ class PhysicsSummary(BaseModel):
     flow_delta_pct: float
 
 
+class ProjectedPoint(BaseModel):
+    """One forward-looking risk sample.
+
+    Emitted by the PINN (or, for now, by an extrapolation of recent slope).
+    Horizon is expressed relative to the current frame so the frontend never
+    has to reason about timestamps when drawing the projection.
+    """
+
+    seconds_ahead: float = Field(..., ge=0.0)
+    score: float = Field(..., ge=0.0, le=100.0)
+
+
+class DivergenceSignal(BaseModel):
+    """"Silent compensation" flag — macro vitals still nominal while the
+    Haoma index is climbing. This is the Phase 2 moment of the pitch; we
+    surface it server-side so the UI never has to re-derive clinical logic.
+    """
+
+    active: bool
+    lead_minutes: float | None = None
+    rationale: str | None = None
+
+
 class WebSocketFrame(BaseModel):
     """Full payload pushed to the frontend every 2-3 seconds."""
 
@@ -76,7 +100,10 @@ class WebSocketFrame(BaseModel):
     haoma_index: float
     haoma_trend: HaomaTrend
     alert_level: AlertLevel
+    macro_vitals_state: MacroVitalsState
     shap_contributions: list[ShapContribution]
+    projected_trajectory: list[ProjectedPoint]
+    divergence: DivergenceSignal
     recommendation: str
 
 

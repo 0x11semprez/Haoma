@@ -39,6 +39,13 @@ def health() -> dict[str, str]:
     }
 
 
-# TODO Dev 3: implement
-#   - POST /observations  (FHIR-like Observation ingest with LOINC codes)
-#   - WebSocket /ws       (push full frames every 2-3s — see CLAUDE.md for payload schema)
+# TODO Dev 3: implement the routes listed in backend/CLAUDE.md §"API surface".
+# Short form:
+#   - POST /auth/badge           → AuthSession        (hackathon auth, any badge)
+#   - GET  /patients             → WardSummary
+#   - GET  /patients/{id}        → PatientDetail
+#   - WS   /ws/patients/{id}     → WebSocketFrame stream (2–3 s cadence)
+# Frame contract (projected_trajectory, macro_vitals_state, divergence, ...) is
+# documented in backend/CLAUDE.md — keep it in sync with haoma.schemas.
+#
+# The Vite proxy strips the `/api` prefix, so mount REST at root (not `/api/...`).

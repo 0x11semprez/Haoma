@@ -2,17 +2,16 @@
  * Unified top bar — single bordered surface that replaces the previous
  * TopBar + SecondaryHeader duo.
  *
+ * Connection chip policy: the nominal "LIVE" state is intentionally silent
+ * — a monitor that's working should not brag. The chip only appears when
+ * the stream is degraded (reconnecting, lost), because that IS safety-
+ * critical information the clinician must see.
+ *
  * Layout:
  *   ┌─────────────────────────────────────────────────────────────────┐
- *   │ HOSPITAL · DEPARTMENT   MON 18 APR · 16:42:08 ● LIVE  Dr. Name… │
+ *   │ HOSPITAL · DEPARTMENT         MON 18 APR · 16:42:08  Dr. Name…  │
  *   │ Ward heading (serif H1)                ▲ n  ◆ n  ● n            │
  *   └─────────────────────────────────────────────────────────────────┘
- *
- * The heading row (`wardHeading` + `counts`) is optional so the Patient
- * page can render only the meta strip.
- *
- * The centered cluster (clock + optional connection chip) sits in its
- * own flex region so side widths never shift it off-center.
  */
 
 import { useNavigate } from 'react-router-dom'
@@ -78,7 +77,9 @@ export function TopBar({
           style={{ flex: '0 0 auto', gap: 14, justifyContent: 'center' }}
         >
           <Clock />
-          {wsStatus ? <ConnectionChip status={wsStatus} /> : null}
+          {wsStatus === 'closed' || wsStatus === 'error' ? (
+            <ConnectionChip status={wsStatus} />
+          ) : null}
         </div>
         <div
           className="flex items-center"

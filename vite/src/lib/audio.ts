@@ -111,7 +111,7 @@ class HaomaAudioEngine {
         this.playClick(ctx)
         return
       case 'badgeSuccess':
-        this.playArpeggio(ctx, [523.25, 659.25, 783.99, 1046.5], {
+        this.playArpeggio([523.25, 659.25, 783.99, 1046.5], {
           stepMs: 85,
           toneDurationMs: 260,
           peakGain: 0.11,
@@ -227,7 +227,6 @@ class HaomaAudioEngine {
 
   /** Rising arpeggio with overlapping chime voices — used for success states. */
   private playArpeggio(
-    ctx: AudioContext,
     freqs: readonly number[],
     opts: { stepMs: number; toneDurationMs: number; peakGain: number },
   ): void {
@@ -267,34 +266,6 @@ class HaomaAudioEngine {
       void this.ctx.resume()
     }
     return this.ctx
-  }
-
-  private playTone(
-    ctx: AudioContext,
-    opts: {
-      freq: number
-      durationMs: number
-      peakGain: number
-      attackMs?: number
-      releaseMs?: number
-    },
-  ): void {
-    if (!this.masterGain) return
-    const now = ctx.currentTime
-    const osc = ctx.createOscillator()
-    const gain = ctx.createGain()
-    osc.type = 'sine'
-    osc.frequency.value = opts.freq
-    const attack = (opts.attackMs ?? 8) / 1000
-    const release = (opts.releaseMs ?? 120) / 1000
-    const duration = opts.durationMs / 1000
-    gain.gain.setValueAtTime(0, now)
-    gain.gain.linearRampToValueAtTime(opts.peakGain, now + attack)
-    gain.gain.setValueAtTime(opts.peakGain, now + Math.max(0, duration - release))
-    gain.gain.linearRampToValueAtTime(0, now + duration)
-    osc.connect(gain).connect(this.masterGain)
-    osc.start(now)
-    osc.stop(now + duration + 0.02)
   }
 
   private playPulseTrain(ctx: AudioContext, opts: PulseTrainOptions): void {

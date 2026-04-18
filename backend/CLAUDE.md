@@ -75,6 +75,124 @@ When adding API endpoints, both modes must work. If a feature can't run in demo 
 
 ---
 
+## API surface — what Dev 3 ships
+
+The Vite frontend proxies `/api/*` → `http://localhost:8000/*` (prefix stripped — see `vite/vite.config.ts`). Mount routes at root, **not** under `/api`. WebSockets are proxied as-is under `/ws`.
+
+**Required endpoints** (frontend already calls these via `vite/src/lib/api.ts`):
+
+| Method | Path                | Response                               | Notes |
+|--------|---------------------|----------------------------------------|---|
+| GET    | `/health`           | `{ status, version, mode }`            | Already live; mode is `"live"` or `"demo"` |
+| POST   | `/auth/badge`       | `AuthSession`                          | Body `{ badge_id: str }`. Hackathon auth: accept any badge, return a token |
+| GET    | `/patients`         | `WardSummary`                          | Hospital + ward + list of `PatientSummary` |
+| GET    | `/patients/{id}`    | `PatientDetail`                        | 404 if unknown |
+| WS     | `/ws/patients/{id}` | stream of `WebSocketFrame` every 2–3 s | Closes on unsubscribe; on reconnect, resumes from live step — no replay |
+
+Pydantic types for `AuthSession`, `WardSummary`, `PatientSummary`, `PatientDetail` **do not yet exist in `schemas.py`** — add them before wiring the routes (mirror the field names in `vite/src/types/ui.ts` 1:1).
+
+### WebSocketFrame — the contract (updated 2026-04-18)
+
+The frame is the single product the frontend renders. Every field below is **non-optional** — emit a sensible default rather than omitting a key, or the UI panels collapse.
+
+| Field | Type | Produced by | Notes |
+|---|---|---|---|
+| `timestamp` | ISO-8601 string | `api/` | UTC, millisecond precision |
+| `patient_id` | str | `api/` | Echo of the path param |
+| `vitals` | `VitalsFrame` | `simulator/` | Raw simulator output. **Do not include `r_sim` / `q_sim` in the payload** — strip before send |
+| `features` | `FeatureVector` | `features/` | Computed from the rolling buffer, not the single frame |
+| `physics` | `PhysicsSummary` | `model/` | R̂, Q̂ and their % delta vs baseline (`R_BASELINE=1.2`, `Q_BASELINE=1.4`) |
+| `haoma_index` | float ∈ [0,1] | `model/` | Head 3 of the PINN |
+| `haoma_trend` | `rising` / `stable` / `falling` | `api/` | First-derivative of `haoma_index` over the last N frames — not a PINN output |
+| `alert_level` | `green` / `orange` / `red` | `api/` | Thresholds live in the scenario JSON (`alert_thresholds`), not hardcoded here |
+| `macro_vitals_state` | `nominal` / `borderline` / `abnormal` | `api/` | Classification of `vitals` against pediatric ranges — see below |
+| `shap_contributions` | `ShapContribution[]` | `xai/` | Top-K (K ≥ 3). Label is a short English clause, not a feature-name dump |
+| `projected_trajectory` | `ProjectedPoint[]` | `model/` (future: PINN forecast) · `api/` (today: slope extrapolation) | Horizon ~60 s; emit ≥ 20 samples so the dashed line looks smooth |
+| `divergence` | `DivergenceSignal` | `api/` | Phase 2 moment — see below |
+| `recommendation` | str | `api/` | English, imperative, ≤ 2 sentences. Sourced from the medical advisor's vocabulary list |
+
+**`macro_vitals_state` classifier (pediatric 4-year-old):**
+```
+out_of_range = 0
+if HR   < 80  or HR   > 120 : out_of_range += 1
+if SpO2 < 95                : out_of_range += 1
+if BPs  < 90  or BPs  > 110 : out_of_range += 1
+if RR   < 20  or RR   > 30  : out_of_range += 1
+
+if out_of_range == 0: "nominal"
+elif out_of_range <= 2: "borderline"
+else: "abnormal"
+```
+Thermal gradient (`features.delta_t`) is intentionally excluded — it belongs to the micro view, not the macro view. That exclusion IS the pitch.
+
+**`divergence` rule:** set `active=True` iff `macro_vitals_state == "nominal"` AND `haoma_index >= 0.35`. When active, compute `lead_minutes` by scanning `projected_trajectory` for the first sample whose score ≥ 80 (critical threshold) and converting its `seconds_ahead` to minutes. `rationale` is an English one-liner — keep it medical, not marketing. When inactive, set all three fields to `False / None / None`.
+
+### Example `WebSocketFrame` (trimmed)
+
+```json
+{
+  "timestamp": "2026-04-18T15:42:03.120Z",
+  "patient_id": "p-001",
+  "vitals": { "heart_rate": 118, "spo2": 97, "bp_systolic": 98, "bp_diastolic": 58, "temp_central": 37.6, "temp_peripheral": 34.8, "perfusion_index": 1.1, "respiratory_rate": 28 },
+  "features": { "delta_t": 2.8, "hrv_trend_30min": -0.42, "pi_fc_ratio": 0.0093, "degradation_slope_30min": 0.018 },
+  "physics": { "resistance": 2.1, "resistance_delta_pct": 75.0, "flow": 0.9, "flow_delta_pct": -35.7 },
+  "haoma_index": 0.52,
+  "haoma_trend": "rising",
+  "alert_level": "orange",
+  "macro_vitals_state": "nominal",
+  "shap_contributions": [
+    { "feature": "hrv_trend_30min", "value": 0.18, "label": "Heart-rate variability drifting downward" },
+    { "feature": "delta_t", "value": 0.11, "label": "Thermal gradient slowly widening" }
+  ],
+  "projected_trajectory": [
+    { "seconds_ahead": 2.0,  "score": 53.2 },
+    { "seconds_ahead": 30.0, "score": 68.9 },
+    { "seconds_ahead": 60.0, "score": 82.4 }
+  ],
+  "divergence": {
+    "active": true,
+    "lead_minutes": 1.0,
+    "rationale": "Macro vitals still within pediatric range while the micro-score climbs — vascular reserve is being consumed silently."
+  },
+  "recommendation": "Close watch. Recheck vitals in 5 minutes."
+}
+```
+
+### Testing the API locally
+
+```bash
+# 1. Start the backend (live mode)
+cd backend && source .venv/bin/activate
+uvicorn haoma.api.main:app --reload --port 8000
+
+# 2. Smoke test REST
+curl -s localhost:8000/health | jq
+curl -s localhost:8000/patients | jq '.patients | length'
+curl -s localhost:8000/patients/p-001 | jq
+curl -s -X POST localhost:8000/auth/badge \
+  -H 'content-type: application/json' \
+  -d '{"badge_id":"test"}' | jq
+
+# 3. Subscribe to the WebSocket and print one frame (requires `websocat`)
+websocat -n1 ws://localhost:8000/ws/patients/p-001 | jq
+
+# 4. Full Pydantic round-trip — validates the payload against schemas.py
+python -c 'import json, sys; from haoma.schemas import WebSocketFrame; \
+  WebSocketFrame.model_validate_json(sys.stdin.read()); print("OK")' \
+  < sample_frame.json
+
+# 5. End-to-end with the Vite frontend (mocks OFF)
+#    vite/.env.development.local → set VITE_USE_MOCKS=0 (or remove the line)
+#    then in vite/: npm run dev  (the DEVELOPER runs this, not Claude — see vite/CLAUDE.md)
+```
+
+**Local testing rules:**
+- Validate every WS payload against `WebSocketFrame.model_validate()` in a unit test before shipping a new field. Silent drift breaks the UI.
+- Write a `tests/test_api_frame.py` that subscribes, collects 5 frames over 10 s, and asserts all 13 top-level keys are present and typed.
+- Demo-mode replay must emit the same shape as live mode — the only difference is where the values come from.
+
+---
+
 ## LOINC codes — single source of truth
 
 All LOINC strings live in `haoma/core/loinc.py`. **No magic strings anywhere else** — import the constant. If you need a new code, add it there with its `VITAL_DISPLAY` and `VITAL_UNIT` entries.

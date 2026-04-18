@@ -15,7 +15,7 @@
  * sheet is a surface, so top corners 4 px, 1 px border, flat scrim fill).
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { MuteToggle, NightToggle } from '@/components/Toggles'
@@ -29,6 +29,8 @@ type LoginState =
   | { kind: 'reading' }
   | { kind: 'success'; name: string }
   | { kind: 'error'; message: string; backendDown: boolean }
+
+type LoginView = 'card' | 'credentials'
 
 const AUTH_KEY = 'haoma.auth'
 const DEMO_BADGE_ID = 'demo-cps-001'
@@ -71,6 +73,9 @@ export function LoginPage() {
   const [state, setState] = useState<LoginState>({ kind: 'idle' })
   const [flashing, setFlashing] = useState(false)
   const [readingStep, setReadingStep] = useState(0)
+  const [view, setView] = useState<LoginView>('card')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const flashTimer = useRef<number | null>(null)
   const navTimer = useRef<number | null>(null)
   const scanTimer = useRef<number | null>(null)
@@ -105,7 +110,10 @@ export function LoginPage() {
   const completeAndNavigate = useCallback(
     (name: string) => {
       setState({ kind: 'success', name })
-      play('badgeSuccess')
+      // Sound peaks within ~20 ms of trigger; the check circle's spring
+      // scale-in peaks ~150 ms in. Delay the chime so audio + visual land
+      // together — otherwise the eye sees the check after the ear hears it.
+      window.setTimeout(() => play('badgeSuccess'), 140)
       flashTimer.current = window.setTimeout(() => {
         setFlashing(true)
       }, FLASH_DELAY_MS)
@@ -152,31 +160,45 @@ export function LoginPage() {
     }
   }, [completeAndNavigate, play, state.kind, unlock])
 
+  // Credential bypass — used by Shift+D, the credentials form and the
+  // fallback button. Replays the full scan animation so the fallback
+  // feels like a real auth path, not a teleport.
+  const runCredentialBypass = useCallback(() => {
+    if (state.kind !== 'idle' && state.kind !== 'error') return
+    const session = buildDemoSession()
+    try {
+      localStorage.setItem(AUTH_KEY, JSON.stringify(session))
+    } catch {
+      /* localStorage disabled — silent fallback */
+    }
+    unlock()
+    play('uiClick')
+    setState({ kind: 'reading' })
+    scanTimer.current = window.setTimeout(() => {
+      completeAndNavigate(session.clinician_name)
+    }, MIN_SCAN_MS)
+  }, [completeAndNavigate, play, state.kind, unlock])
+
+  const handleCredentialSubmit = useCallback(
+    (ev: FormEvent<HTMLFormElement>) => {
+      ev.preventDefault()
+      if (!email.trim() || !password) return
+      runCredentialBypass()
+    },
+    [email, password, runCredentialBypass],
+  )
+
   useEffect(() => {
     const onKeyDown = (ev: KeyboardEvent) => {
       if (!ev.shiftKey) return
       if (ev.key !== 'D' && ev.key !== 'd') return
       if (state.kind !== 'idle' && state.kind !== 'error') return
       ev.preventDefault()
-      const session = buildDemoSession()
-      try {
-        localStorage.setItem(AUTH_KEY, JSON.stringify(session))
-      } catch {
-        /* localStorage disabled — silent fallback */
-      }
-      unlock()
-      play('uiClick')
-      // Shift+D replays the full scan animation — same rhythm as a real
-      // badge tap, but skips the network call and drops straight into the
-      // success beat once MIN_SCAN_MS elapses.
-      setState({ kind: 'reading' })
-      scanTimer.current = window.setTimeout(() => {
-        completeAndNavigate(session.clinician_name)
-      }, MIN_SCAN_MS)
+      runCredentialBypass()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [completeAndNavigate, play, state.kind, unlock])
+  }, [runCredentialBypass, state.kind])
 
   const handleRetry = useCallback(() => {
     setState({ kind: 'idle' })
@@ -268,6 +290,21 @@ export function LoginPage() {
             width: '100%',
           }}
         >
+          <AnimatePresence mode="wait" initial={false}>
+          {view === 'card' && (
+          <motion.div
+            key="card-view"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              width: '100%',
+            }}
+          >
           <div
             style={{
               fontFamily: 'var(--sans)',
@@ -505,6 +542,256 @@ export function LoginPage() {
               )}
             </AnimatePresence>
           </div>
+          </motion.div>
+          )}
+
+          {view === 'credentials' && (
+          <motion.div
+            key="credentials-view"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              width: '100%',
+            }}
+          >
+            <div
+              style={{
+                fontFamily: 'var(--sans)',
+                fontSize: 15,
+                fontWeight: 500,
+                letterSpacing: '0.28em',
+                textTransform: 'uppercase',
+                color: 'var(--ink-soft)',
+              }}
+            >
+              Credentials
+            </div>
+
+            <h1
+              style={{
+                marginTop: 24,
+                marginBottom: 0,
+                fontFamily: 'var(--serif)',
+                fontSize: 'clamp(80px, 10.5vw, 148px)',
+                fontStyle: 'italic',
+                fontWeight: 400,
+                lineHeight: 0.98,
+                letterSpacing: '-0.035em',
+                color: 'var(--ink)',
+                textAlign: 'center',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Sign in
+            </h1>
+
+            <p
+              style={{
+                marginTop: 28,
+                marginBottom: 0,
+                fontFamily: 'var(--sans)',
+                fontSize: 20,
+                fontWeight: 400,
+                lineHeight: 1.3,
+                color: 'var(--ink-soft)',
+                textAlign: 'center',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Enter your clinician credentials to access the ward.
+            </p>
+
+            <form
+              onSubmit={handleCredentialSubmit}
+              style={{
+                marginTop: 48,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'stretch',
+                gap: 28,
+                width: 'min(420px, 100%)',
+              }}
+            >
+              <label
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: 'var(--sans)',
+                    fontSize: 13,
+                    fontWeight: 500,
+                    letterSpacing: '0.22em',
+                    textTransform: 'uppercase',
+                    color: 'var(--ink-soft)',
+                  }}
+                >
+                  Email
+                </span>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                  placeholder="doctor@hospital.fr"
+                  disabled={disabled}
+                  className="login-field"
+                />
+              </label>
+
+              <label
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: 'var(--sans)',
+                    fontSize: 13,
+                    fontWeight: 500,
+                    letterSpacing: '0.22em',
+                    textTransform: 'uppercase',
+                    color: 'var(--ink-soft)',
+                  }}
+                >
+                  Password
+                </span>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  autoComplete="current-password"
+                  placeholder="••••••••"
+                  disabled={disabled}
+                  className="login-field"
+                />
+              </label>
+
+              <div
+                style={{
+                  marginTop: 16,
+                  display: 'flex',
+                  justifyContent: 'center',
+                }}
+              >
+                <button
+                  type="submit"
+                  disabled={disabled}
+                  className="enter-btn"
+                >
+                  <span className="enter-btn-label enter-btn-label-idle">
+                    Continue
+                  </span>
+                  <span className="enter-btn-label enter-btn-label-hover">
+                    Enter →
+                  </span>
+                </button>
+              </div>
+            </form>
+          </motion.div>
+          )}
+          </AnimatePresence>
+
+          {view === 'credentials' && (
+            <button
+              type="button"
+              onClick={() => setView('card')}
+              disabled={disabled}
+              style={{
+                marginTop: 48,
+                padding: '8px 4px',
+                background: 'transparent',
+                border: 'none',
+                cursor: disabled ? 'default' : 'pointer',
+                fontFamily: 'var(--sans)',
+                fontSize: 15,
+                fontWeight: 400,
+                letterSpacing: '0.01em',
+                color: 'var(--ink-soft)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                opacity: disabled ? 0.4 : 1,
+                transition: 'color 180ms ease, opacity 180ms ease',
+              }}
+              onMouseEnter={(e) => {
+                if (disabled) return
+                e.currentTarget.style.color = 'var(--ink)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'var(--ink-soft)'
+              }}
+            >
+              <span aria-hidden="true">←</span>
+              <span
+                style={{
+                  textDecoration: 'underline',
+                  textUnderlineOffset: 4,
+                  textDecorationThickness: 1,
+                }}
+              >
+                Use your CPS card instead
+              </span>
+            </button>
+          )}
+
+          {view === 'card' && (
+            <button
+              type="button"
+              onClick={() => setView('credentials')}
+              disabled={disabled}
+              style={{
+                marginTop: 56,
+                padding: '8px 4px',
+                background: 'transparent',
+                border: 'none',
+                cursor: disabled ? 'default' : 'pointer',
+                fontFamily: 'var(--sans)',
+                fontSize: 15,
+                fontWeight: 400,
+                letterSpacing: '0.01em',
+                color: 'var(--ink-soft)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                opacity: disabled ? 0.4 : 1,
+                transition: 'color 180ms ease, opacity 180ms ease',
+              }}
+              onMouseEnter={(e) => {
+                if (disabled) return
+                e.currentTarget.style.color = 'var(--ink)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'var(--ink-soft)'
+              }}
+            >
+              <span>Forgot your card?</span>
+              <span aria-hidden="true" style={{ color: 'var(--ink-muted)' }}>
+                —
+              </span>
+              <span
+                style={{
+                  textDecoration: 'underline',
+                  textUnderlineOffset: 4,
+                  textDecorationThickness: 1,
+                }}
+              >
+                Sign in with credentials
+              </span>
+            </button>
+          )}
         </motion.div>
       </section>
 
@@ -527,7 +814,7 @@ export function LoginPage() {
               style={{
                 position: 'fixed',
                 inset: 0,
-                background: 'rgba(12, 10, 8, 0.46)',
+                background: 'rgba(6, 5, 3, 0.74)',
                 zIndex: 4,
               }}
             />
@@ -551,17 +838,17 @@ export function LoginPage() {
                 bottom: 0,
                 // Horizontal centering is threaded through the x prop above
                 // so framer-motion's transform management doesn't clobber it.
-                width: 'min(560px, calc(100vw - 24px))',
+                width: 'min(680px, calc(100vw - 32px))',
                 background: 'var(--bg)',
                 borderTop: '1px solid var(--line)',
                 borderLeft: '1px solid var(--line)',
                 borderRight: '1px solid var(--line)',
                 borderRadius: '4px 4px 0 0',
-                padding: '36px 44px 44px',
+                padding: '48px 56px 56px',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                gap: 20,
+                gap: 24,
                 zIndex: 5,
               }}
             >
@@ -569,11 +856,11 @@ export function LoginPage() {
               <div
                 aria-hidden="true"
                 style={{
-                  width: 56,
-                  height: 3,
+                  width: 64,
+                  height: 4,
                   background: 'var(--line)',
                   borderRadius: 2,
-                  marginTop: -16,
+                  marginTop: -24,
                 }}
               />
 
@@ -588,7 +875,7 @@ export function LoginPage() {
                   transition={{ duration: 0.24 }}
                   style={{
                     fontFamily: 'var(--sans)',
-                    fontSize: 13,
+                    fontSize: 15,
                     fontWeight: 600,
                     letterSpacing: '0.28em',
                     textTransform: 'uppercase',
@@ -599,23 +886,26 @@ export function LoginPage() {
                 </motion.div>
               </AnimatePresence>
 
-              {/* Visual center — pulse stack swaps for the check circle on
-               * success with a spring scale-in for that snappy Apple beat. */}
-              <div style={{ position: 'relative', width: 128, height: 128 }}>
-                <AnimatePresence mode="wait" initial={false}>
+              {/* Visual center — pulse stack crossfades with the check
+               * circle on success. Intentionally no `mode="wait"` so the
+               * check scales in as the pulses fade, keeping the motion in
+               * sync with the chime (audio peaks ~20 ms, check spring
+               * ~150 ms — the sound is delayed by 140 ms to match). */}
+              <div style={{ position: 'relative', width: 152, height: 152 }}>
+                <AnimatePresence initial={false}>
                   {isReading ? (
                     <motion.div
                       key="pulses"
                       initial={{ opacity: 0, scale: 0.86 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.86 }}
-                      transition={{ duration: 0.26 }}
+                      transition={{ duration: 0.18 }}
                       style={{ position: 'absolute', inset: 0 }}
                     >
                       <svg
                         className="scan-pulse-stack"
-                        width={128}
-                        height={128}
+                        width={152}
+                        height={152}
                         viewBox="0 0 200 200"
                         aria-hidden="true"
                       >
@@ -628,20 +918,24 @@ export function LoginPage() {
                   ) : (
                     <motion.div
                       key="check"
-                      initial={{ opacity: 0, scale: 0.8 }}
+                      initial={{ opacity: 0, scale: 0.6 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0 }}
                       transition={{
+                        // Tight spring: peaks near 140 ms to land with the
+                        // (delayed) chime. Slight scale-up-from-small for
+                        // the Apple-style snap.
                         type: 'spring',
-                        stiffness: 320,
-                        damping: 22,
-                        mass: 0.7,
+                        stiffness: 460,
+                        damping: 26,
+                        mass: 0.6,
+                        delay: 0.05,
                       }}
                       style={{ position: 'absolute', inset: 0 }}
                     >
                       <svg
-                        width={128}
-                        height={128}
+                        width={152}
+                        height={152}
                         viewBox="0 0 100 100"
                         aria-hidden="true"
                         overflow="visible"
@@ -740,7 +1034,7 @@ export function LoginPage() {
                         style={{
                           fontFamily: 'var(--serif)',
                           fontStyle: 'italic',
-                          fontSize: 32,
+                          fontSize: 40,
                           lineHeight: 1.05,
                           letterSpacing: '-0.02em',
                           color: 'var(--ink)',
@@ -763,7 +1057,7 @@ export function LoginPage() {
                           alignItems: 'center',
                           gap: 10,
                           fontFamily: 'var(--sans)',
-                          fontSize: 13,
+                          fontSize: 14,
                           fontWeight: 500,
                           letterSpacing: '0.28em',
                           textTransform: 'uppercase',
