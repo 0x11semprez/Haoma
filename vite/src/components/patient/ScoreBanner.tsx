@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, animate, motion, useReducedMotion } from 'framer-motion'
 import { SeverityTag } from '@/components/SeverityTag'
 import { PatientCard } from '@/components/patient/PatientCard'
+import { severityOf } from '@/lib/clinical'
 import type { WebSocketFrame } from '@/types/api'
 
 /**
@@ -23,12 +24,7 @@ import type { WebSocketFrame } from '@/types/api'
 export function ScoreBanner({ frame }: { frame: WebSocketFrame | null }) {
   const score = frame ? Math.round(frame.haoma_index * 100) : null
   const alertLevel = frame?.alert_level ?? 'green'
-  const pulseClass =
-    frame?.alert_level === 'red'
-      ? 'pulse-high'
-      : frame?.alert_level === 'orange'
-        ? 'pulse-med'
-        : ''
+  const pulseClass = severityOf(alertLevel).pulseClass
 
   // Suppress the trend line when it restates the severity (stable + green).
   // Any other combination is meaningful and stays visible.
@@ -184,12 +180,7 @@ function ScoreGauge({
   alertLevel: WebSocketFrame['alert_level']
 }) {
   const reduced = useReducedMotion()
-  const color =
-    alertLevel === 'red'
-      ? 'var(--critical)'
-      : alertLevel === 'orange'
-        ? 'var(--warning)'
-        : 'var(--stable)'
+  const color = severityOf(alertLevel).colorVar
   const pct = score ?? 0
 
   return (

@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "bash scripts/check-no-mocks.sh && tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:mocks": "bash scripts/check-no-mocks.sh"
   },
   "dependencies": {
     "clsx": "^2.1.1",

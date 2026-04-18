@@ -302,43 +302,42 @@ Every frontend PR must pass these checks before review:
 - [ ] No `box-shadow` / gradient on surfaces (cards, sections). Primary CTA pill + subtle shadow is the only allowed exception (§3.5, §6)
 - [ ] `border-radius` ≤ 4 px on surfaces; 999 px (pill) allowed only on primary CTAs (§6)
 - [ ] `tabular-nums` active on every aligned numeric column
-- [ ] **No `HAOMA_MOCK` tag left in the tree** — mocks fully removed (§10)
 
 ---
 
-## 10. Mocks — TEMPORARY scaffolding, MUST be removed before merge
+## 10. Integration test checklist — ready-to-test against the live PINN backend
 
-> ⚠️ **This whole section is about throwaway code.** It exists so Dev 3 can iterate on the UI before the FastAPI + WebSocket layer is wired. Any PR that ships `HAOMA_MOCK` to `main` is blocked.
+> The frontend is now mock-free for every patient-facing flow. The single remaining stub is `stubAuthenticateBadge` in `src/lib/auth-stub.ts` (login placeholder, swapped out when backend auth ships).
 
-### How it works
+Run `bash scripts/check-no-mocks.sh` before every push. The `npm run build` script chains it automatically.
 
-- All fake data and fake transports live in a **single file**: `src/lib/mocks.ts`.
-- The switch is an env flag: `VITE_USE_MOCKS=1` in `vite/.env.development.local` (never committed — `.env*` is gitignored at repo root).
-- `src/lib/api.ts` is the **only** consumer of `mocks.ts`. Every call site is annotated with the literal tag `HAOMA_MOCK` for grep-based cleanup.
-- UI components import from `@/lib/api` exactly as in production mode — no component should ever import from `@/lib/mocks` directly.
+When the FastAPI backend comes online, walk through this checklist to validate end-to-end:
 
-### Enable locally
+### Boot & connectivity
+- [ ] `GET /api/health` returns `{ status: "ok", mode: "live" | "demo" }`. `BackendUnreachableBanner` stays hidden.
+- [ ] Cold backend (service down) → banner appears within 5 s (probe timeout). Retry re-runs the probe.
+- [ ] `vite/.env.example` copied to `.env.local` only if backend is off-origin; otherwise the Vite proxy is enough.
 
-```bash
-# vite/.env.development.local
-VITE_USE_MOCKS=1
-```
+### Ward view (`/ward`)
+- [ ] `GET /api/patients` populates the grid. Empty array → "No patients to monitor". 5xx → ErrorPanel with Retry.
+- [ ] Sort order: critical → watch → stable, then `haoma_index desc` within each band.
+- [ ] Each card clickable → navigates to `/patient/:id`.
+- [ ] `CriticalAlertBar` appears iff at least one patient is red.
 
-Then `npm run dev`. Hit `/login`, scan the card (any tap succeeds), land on `/ward`. The featured patient `p-001` cycles green → orange → red in ~2.5 min via a sigmoid curve (CLAUDE.md pillar #3); the other 5 patients oscillate around their baseline so the ward keeps a visual mix of severities.
+### Patient view (`/patient/:id`)
+- [ ] `GET /api/patients/:id` 200 → `PatientHeader` renders. 404 → `PatientErrorPanel` with Retry.
+- [ ] `WS /ws/patients/:id` connects; `ConnectionChip` reflects status (connecting → open → closed/error).
+- [ ] Frames arrive every 2–3 s. `ScoreBanner`, `VitalsGrid`, `FeaturesPanel`, `DivergenceBanner`, `ContributingFactors`, `ScoreTimeline` all render without crash when fields are missing or empty.
+- [ ] WS drop mid-session → last frame stays on screen; chip turns red/amber.
+- [ ] Silence button mutes alerts only for the active critical window.
 
-### Removal checklist (RUN ALL BEFORE MERGE TO MAIN)
+### Clinical safety
+- [ ] Pulse animations fire only on `pulse-high` (critical) / `pulse-med` (watch). Stable is static.
+- [ ] `prefers-reduced-motion` disables all pulses (§5 CSS already enforces).
+- [ ] `filter: grayscale(1)` sanity — no clinical information lost.
+- [ ] No red outside IEC patient-critical. `BackendUnreachableBanner` uses amber + diamond (degraded-monitoring, medium priority).
 
-- [ ] Delete `vite/src/lib/mocks.ts`
-- [ ] In `vite/src/lib/api.ts`, strip **every** line tagged `HAOMA_MOCK`, the `import { … USE_MOCKS } from './mocks'` block, and the banner comment at the top of the file
-- [ ] `cd vite && grep -r HAOMA_MOCK src` returns **nothing**
-- [ ] `cd vite && grep -r VITE_USE_MOCKS src .env*` returns **nothing**
-- [ ] `npm run build` passes with no unused-import errors
-- [ ] Delete this §10 from `vite/CLAUDE.md` and the `HAOMA_MOCK` bullet above in §9
-- [ ] Remove `vite/.env.development.local` if it only existed for the flag
-
-### Do NOT
-
-- Import `mocks.ts` from components, hooks, or pages — only `api.ts` may.
-- Add new mock fixtures outside `mocks.ts`. One file to delete.
-- Let mock strings diverge from the §1 English-only rule — the jury will see mocks during rehearsal.
-- Ship a mock on `main`, even behind a flag. The flag is a developer convenience, not a runtime feature.
+### CI guard
+- [ ] `npm run check:mocks` exits 0.
+- [ ] `npm run build` succeeds (runs the mock guard first).
+- [ ] `npm run lint` passes.

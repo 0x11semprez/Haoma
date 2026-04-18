@@ -11,12 +11,65 @@ import { LandingPage } from './pages/Landing'
 import { LoginPage } from './pages/Login'
 import { WardPage } from './pages/Ward'
 import { PatientPage } from './pages/Patient'
+import { BackendUnreachableBanner } from './components/BackendUnreachableBanner'
 import { CriticalAlertBar } from './components/CriticalAlertBar'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { useHealthProbe } from './hooks/useHealthProbe'
 import { getSession } from '@/lib/api'
+
+const HEALTH_DISMISSED_KEY = 'haoma.healthBannerDismissed'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   return getSession() ? <>{children}</> : <Navigate to="/login" replace />
+}
+
+/**
+ * Mounts the single health probe for authenticated sessions and renders the
+ * degraded-monitoring banner when `/api/health` fails (or returns a mocked
+ * backend). The dismiss flag is scoped to `sessionStorage` so it clears when
+ * the tab closes — a fresh shift should always re-surface the warning.
+ *
+ * Extracted to its own component so the probe only fires AFTER the auth gate
+ * passes and on authed routes — no network chatter on Landing / Login.
+ */
+function AuthedBackendHealth() {
+  const { status, retry } = useHealthProbe()
+  const [dismissed, setDismissed] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem(HEALTH_DISMISSED_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+
+  if (status !== 'unreachable' || dismissed) return null
+
+  const handleDismiss = () => {
+    try {
+      sessionStorage.setItem(HEALTH_DISMISSED_KEY, '1')
+    } catch {
+      /* sessionStorage disabled — fall back to component-local dismissal */
+    }
+    setDismissed(true)
+  }
+
+  const handleRetry = () => {
+    // On manual retry, also clear any prior dismissal so a successful probe
+    // isn't shadowed by a stale "dismissed" flag from a previous outage.
+    try {
+      sessionStorage.removeItem(HEALTH_DISMISSED_KEY)
+    } catch {
+      /* no-op */
+    }
+    retry()
+  }
+
+  return (
+    <BackendUnreachableBanner
+      onRetry={handleRetry}
+      onDismiss={handleDismiss}
+    />
+  )
 }
 
 /* ── Route transitions + post-auth wipe overlay ────────────────────────
@@ -169,6 +222,9 @@ function RootLayout() {
 
   return (
     <>
+      {showBanner ? (
+        <AuthedBackendHealth />
+      ) : null}
       {showBanner ? <CriticalAlertBar /> : null}
 
       <AnimatePresence mode="wait" initial={false}>

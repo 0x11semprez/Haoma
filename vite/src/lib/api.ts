@@ -10,25 +10,8 @@
  */
 
 import type { WebSocketFrame } from '@/types/api'
-import type {
-  AuthSession,
-  BadgeAuthRequest,
-  PatientDetail,
-  WardSummary,
-} from '@/types/ui'
-// ┌─────────────────────────────── HAOMA_MOCK ──────────────────────────────┐
-// │ TEMP: mocks let Dev 3 iterate on the UI before FastAPI is wired.        │
-// │ REMOVE before merge — see vite/CLAUDE.md §Mocks. Full checklist there.  │
-// │ Flip via `.env.development.local` → `VITE_USE_MOCKS=1`.                 │
-// └─────────────────────────────────────────────────────────────────────────┘
-import {
-  mockAuthenticate,
-  mockFetchHealth,
-  mockFetchPatient,
-  mockFetchWard,
-  mockSubscribeToPatient,
-  USE_MOCKS,
-} from './mocks'
+import type { AuthSession, PatientDetail, WardSummary } from '@/types/ui'
+import { stubAuthenticateBadge } from './auth-stub'
 
 const REST_BASE =
   (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ??
@@ -84,13 +67,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 /* ── Auth ──────────────────────────────────────────────────────────── */
 
 export async function authenticateBadge(badgeId: string): Promise<AuthSession> {
-  if (USE_MOCKS) return mockAuthenticate(badgeId) // HAOMA_MOCK
-  const session = await request<AuthSession>('/auth/badge', {
-    method: 'POST',
-    body: JSON.stringify({ badge_id: badgeId } satisfies BadgeAuthRequest),
-  })
-  localStorage.setItem(AUTH_KEY, JSON.stringify(session))
-  return session
+  return stubAuthenticateBadge(badgeId)
 }
 
 export function getSession(): AuthSession | null {
@@ -109,21 +86,15 @@ export function clearSession(): void {
 /* ── Ward + patient REST ──────────────────────────────────────────── */
 
 export const fetchWard = (): Promise<WardSummary> =>
-  USE_MOCKS /* HAOMA_MOCK */
-    ? mockFetchWard()
-    : request<WardSummary>('/patients')
+  request<WardSummary>('/patients')
 
 export const fetchPatient = (id: string): Promise<PatientDetail> =>
-  USE_MOCKS /* HAOMA_MOCK */
-    ? mockFetchPatient(id)
-    : request<PatientDetail>(`/patients/${encodeURIComponent(id)}`)
+  request<PatientDetail>(`/patients/${encodeURIComponent(id)}`)
 
 /* ── Health ───────────────────────────────────────────────────────── */
 
 export const fetchHealth = () =>
-  USE_MOCKS /* HAOMA_MOCK */
-    ? mockFetchHealth()
-    : request<{ status: string; version: string; mode: string }>('/health')
+  request<{ status: string; version: string; mode: string }>('/health')
 
 /* ── WebSocket ────────────────────────────────────────────────────── */
 
@@ -145,7 +116,6 @@ export function subscribeToPatient(
     onError?: (err: unknown) => void
   },
 ): WsHandle {
-  if (USE_MOCKS) return mockSubscribeToPatient(patientId, handlers) // HAOMA_MOCK
   const url = buildWsUrl(`/ws/patients/${encodeURIComponent(patientId)}`)
   let socket: WebSocket | null = null
   let attempt = 0
