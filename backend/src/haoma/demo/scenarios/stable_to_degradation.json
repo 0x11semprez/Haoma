@@ -1,0 +1,62 @@
+{
+  "scenario_id": "PICU-stable-to-degradation-v1",
+  "description": "Pediatric renal transplant patient, 4 years old, progressive micro-vascular collapse over a compressed 6-minute timeline for the jury demo.",
+  "seed": 42,
+  "patient": {
+    "age_years": 4,
+    "weight_kg": 16,
+    "pathology": "post-renal-transplant",
+    "baseline": {
+      "heart_rate": 98,
+      "spo2": 98,
+      "bp_systolic": 100,
+      "bp_diastolic": 62,
+      "temp_central": 37.0,
+      "temp_peripheral": 35.2,
+      "perfusion_index": 1.8,
+      "respiratory_rate": 24
+    }
+  },
+  "timeline": {
+    "total_seconds": 360,
+    "sampling_hz": 1,
+    "phases": [
+      {
+        "name": "stable",
+        "start_s": 0,
+        "end_s": 90,
+        "mode": "stable",
+        "target_haoma_index": [0.10, 0.25]
+      },
+      {
+        "name": "silent_drift",
+        "start_s": 90,
+        "end_s": 240,
+        "mode": "degradation",
+        "degradation_profile": "sigmoid",
+        "macro_vitals_stay_green": true,
+        "target_haoma_index": [0.25, 0.55]
+      },
+      {
+        "name": "imminent_alert",
+        "start_s": 240,
+        "end_s": 300,
+        "mode": "degradation",
+        "degradation_profile": "sigmoid_steep",
+        "target_haoma_index": [0.55, 0.88]
+      },
+      {
+        "name": "ablation_backup_slide",
+        "start_s": 300,
+        "end_s": 360,
+        "mode": "static",
+        "note": "Phase 4 is a backup slide with ablation metrics, not a live split-screen. See CLAUDE.md."
+      }
+    ]
+  },
+  "alert_thresholds": {
+    "green_max": 0.40,
+    "orange_max": 0.75,
+    "red_min": 0.75
+  }
+}

@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# Regenerated artifacts (never committed)
+data/weights/*
+!data/weights/.gitkeep
+data/precomputed/*
+!data/precomputed/.gitkeep
+
+# Env
+.env
+.env.local
