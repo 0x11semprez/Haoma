@@ -1,18 +1,19 @@
 /**
  * Login — `/login`
- * CPS card scan with an Apple-Pay-style half-sheet. Tap the card → a scrim
- * drops, the sheet springs up from the bottom carrying the scan (three
- * pulsing waves + rotating clinical labels: Reading card → Verifying
- * credentials → Authenticating, ~2.4 s) → the waves swap for a green
- * check circle (spring scale-in), the header flips to "Authenticated"
- * in --stable, "Welcome again, {name}" fades up in serif italic, then
- * "Entering ward →" → a full-viewport flash snaps in and hands off to
- * /ward. Keyboard bypass: Shift+D runs the same animation end-to-end.
+ * CPS card scan, single-surface version. Tap the card → a thin vertical
+ * beam sweeps across the illustration once (~1.1 s). On success the card
+ * stroke crossfades to --stable, a filled ✓ badge springs in at the
+ * top-right corner, and "Welcome again, {name}" fades up in serif italic
+ * below — then a full-viewport flash snaps in and hands off to /ward.
+ * On failure the stroke flips to --critical and the existing ▲ triangle
+ * badge appears with an inline retry. Keyboard bypass: Shift+D runs the
+ * same animation end-to-end.
  *
  * Design system: vite/CLAUDE.md §2 (type), §3 (palette — --stable carries
- * the confirmed identity, triple-encoded with the check glyph + caps label),
- * §4 (glyphs), §5 (motion), §6 (no shadow, radius ≤ 4 px on surfaces — the
- * sheet is a surface, so top corners 4 px, 1 px border, flat scrim fill).
+ * the confirmed identity, triple-encoded with the ✓ glyph + welcome line;
+ * --critical + ▲ glyph + retry text on failure), §4 (glyphs), §5 (motion),
+ * §6 (no shadow, flat surfaces — the scan lives on the card itself, no
+ * modal, no scrim).
  */
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
@@ -35,28 +36,28 @@ type LoginView = 'card' | 'credentials'
 const AUTH_KEY = 'haoma.auth'
 const DEMO_BADGE_ID = 'demo-cps-001'
 
-/* Reading phase: three staggered pulse waves at ~466 ms cadence (see
- * .scan-pulse in index.css). 2.4 s = one full wave cycle + the head of
- * the next, enough to read the rhythm without feeling stuck. */
-const MIN_SCAN_MS = 2400
-/* Reading-phase status labels: rotated in order while the waves pulse,
- * each held for READING_STEP_MS (plus a 300 ms crossfade). Gives the scan
- * a clinical narrative rather than a single static "Reading…" line. */
-const READING_LABELS = [
-  'Reading card',
-  'Verifying credentials',
-  'Authenticating',
-] as const
-const READING_STEP_MS = 800
+/* Reading phase: a thin vertical beam sweeps across the card in three
+ * passes (L→R→L→R) to read as a deliberate round-trip scan. Must match
+ * .card-scan-line animation duration in index.css. */
+const MIN_SCAN_MS = 2000
 /* Success beat, staged:
- *   0 ms    → check circle scales in (scan-check-circle, 380 ms)
- *   250 ms  → "Welcome again, {name}" fades up (serif italic)
- *   750 ms  → "Access unlocked" fades up (caps, --stable)
- *   1800 ms → full-viewport flash snaps in (180 ms)
- *   2000 ms → navigate while flash is fully opaque so the route crossfade
- *             happens behind the cover (RootLayout overlay picks it up). */
-const FLASH_DELAY_MS = 1800
-const NAV_DELAY_MS = 2000
+ *   0 ms    → card stroke crossfades to --stable (SVG transition, 200 ms)
+ *   50 ms   → ✓ badge springs in (scan-check-pop, 380 ms)
+ *   250 ms  → "Welcome again, {name}" fades up (serif italic, peaks ~750 ms)
+ *   1000 ms → enter `departing` — page content fades to 0 while a fixed
+ *             ✓ seal springs in at viewport centre (the card's corner ✓
+ *             disappears with the content; the new one reads as the same
+ *             badge "jumping" off the page)
+ *   1500 ms → seal's disc scales up (35×) to cover the viewport; the ✓
+ *             path fades out so the final cover is a solid --stable field
+ *   1950 ms → navigate behind the opaque cover; RootLayout's iris-
+ *             contraction overlay picks up the handoff in --stable. */
+const WELCOME_HOLD_MS = 1000
+const SEAL_POP_MS = 1100
+const DOTS_EXIT_MS = 240
+const SEAL_COVER_MS = 450
+const NAV_DELAY_MS =
+  WELCOME_HOLD_MS + SEAL_POP_MS + DOTS_EXIT_MS + SEAL_COVER_MS
 
 function buildDemoSession(): AuthSession {
   return {
@@ -71,12 +72,13 @@ export function LoginPage() {
   const navigate = useNavigate()
   const { play, unlock } = useAudio()
   const [state, setState] = useState<LoginState>({ kind: 'idle' })
-  const [flashing, setFlashing] = useState(false)
-  const [readingStep, setReadingStep] = useState(0)
+  const [departing, setDeparting] = useState(false)
+  const [sealStage, setSealStage] = useState<'pop' | 'cover'>('pop')
   const [view, setView] = useState<LoginView>('card')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const flashTimer = useRef<number | null>(null)
+  const departTimer = useRef<number | null>(null)
+  const coverTimer = useRef<number | null>(null)
   const navTimer = useRef<number | null>(null)
   const scanTimer = useRef<number | null>(null)
 
@@ -88,24 +90,12 @@ export function LoginPage() {
 
   useEffect(() => {
     return () => {
-      if (flashTimer.current !== null) window.clearTimeout(flashTimer.current)
+      if (departTimer.current !== null) window.clearTimeout(departTimer.current)
+      if (coverTimer.current !== null) window.clearTimeout(coverTimer.current)
       if (navTimer.current !== null) window.clearTimeout(navTimer.current)
       if (scanTimer.current !== null) window.clearTimeout(scanTimer.current)
     }
   }, [])
-
-  // Advance the rotating reading label while scanning. Reset to 0 every
-  // time we enter (or leave) the reading state so a retry starts fresh.
-  useEffect(() => {
-    if (state.kind !== 'reading') {
-      setReadingStep(0)
-      return
-    }
-    const id = window.setInterval(() => {
-      setReadingStep((s) => Math.min(s + 1, READING_LABELS.length - 1))
-    }, READING_STEP_MS)
-    return () => window.clearInterval(id)
-  }, [state.kind])
 
   const completeAndNavigate = useCallback(
     (name: string) => {
@@ -114,17 +104,24 @@ export function LoginPage() {
       // scale-in peaks ~150 ms in. Delay the chime so audio + visual land
       // together — otherwise the eye sees the check after the ear hears it.
       window.setTimeout(() => play('badgeSuccess'), 140)
-      flashTimer.current = window.setTimeout(() => {
-        setFlashing(true)
-      }, FLASH_DELAY_MS)
+      // Stage 1 — after the welcome hold, fade the page content and
+      // pop the centered ✓ seal.
+      departTimer.current = window.setTimeout(() => {
+        setDeparting(true)
+      }, WELCOME_HOLD_MS)
+      // Stage 2 — once the pop settles, scale the disc up to cover the
+      // viewport. The ✓ fades during this stage so the final cover is a
+      // clean --stable field.
+      coverTimer.current = window.setTimeout(() => {
+        setSealStage('cover')
+      }, WELCOME_HOLD_MS + SEAL_POP_MS)
+      // Stage 3 — navigate behind the opaque cover. Hand the colour off
+      // to RootLayout so its contraction overlay matches the seal.
       navTimer.current = window.setTimeout(() => {
-        // Hand the cover off to the RootLayout overlay so it survives
-        // the /login → /ward unmount. Without this flag, Login's local
-        // flash unmounts one frame before Ward paints = visible pop.
         try {
           sessionStorage.setItem('haoma.authWipe', '1')
         } catch {
-          /* sessionStorage disabled — soft-fail, local flash still covers most of it */
+          /* sessionStorage disabled — soft-fail, local cover still holds */
         }
         navigate('/ward')
       }, NAV_DELAY_MS)
@@ -143,6 +140,9 @@ export function LoginPage() {
       await minScan
       completeAndNavigate(session.clinician_name)
     } catch (err) {
+      // Let the beam finish its pass before the card flips to --critical,
+      // otherwise the sweep would cut mid-motion and read as a glitch.
+      await minScan
       if (err instanceof HaomaApiError) {
         const backendDown = err.status === 0 || err.status === 404
         const message = backendDown
@@ -209,7 +209,14 @@ export function LoginPage() {
   const isError = state.kind === 'error'
   const disabled = isReading || isSuccess
 
-  const cardStroke = isError ? 'var(--critical)' : 'var(--ink)'
+  // Card stroke follows the clinical state (triple-encoded with the
+  // overlaid glyph + below-card text). SVG has a 200 ms `stroke`
+  // transition so the flip feels continuous with the beam finishing.
+  const cardStroke = isSuccess
+    ? 'var(--stable)'
+    : isError
+      ? 'var(--critical)'
+      : 'var(--ink)'
 
   return (
     <main
@@ -281,8 +288,12 @@ export function LoginPage() {
       >
         <motion.div
           initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          animate={{ opacity: departing ? 0 : 1, y: 0 }}
+          transition={
+            departing
+              ? { duration: 0.3, ease: [0.22, 1, 0.36, 1] }
+              : { duration: 0.5, ease: [0.22, 1, 0.36, 1] }
+          }
           style={{
             display: 'flex',
             flexDirection: 'column',
@@ -305,25 +316,12 @@ export function LoginPage() {
               width: '100%',
             }}
           >
-          <div
-            style={{
-              fontFamily: 'var(--sans)',
-              fontSize: 15,
-              fontWeight: 500,
-              letterSpacing: '0.28em',
-              textTransform: 'uppercase',
-              color: 'var(--ink-soft)',
-            }}
-          >
-            Identification
-          </div>
-
           <h1
             style={{
-              marginTop: 24,
+              marginTop: 0,
               marginBottom: 0,
               fontFamily: 'var(--serif)',
-              fontSize: 'clamp(80px, 10.5vw, 148px)',
+              fontSize: 'clamp(96px, 12.5vw, 180px)',
               fontStyle: 'italic',
               fontWeight: 400,
               lineHeight: 0.98,
@@ -338,12 +336,12 @@ export function LoginPage() {
 
           <p
             style={{
-              marginTop: 28,
+              marginTop: 32,
               marginBottom: 0,
               fontFamily: 'var(--sans)',
-              fontSize: 20,
+              fontSize: 22,
               fontWeight: 400,
-              lineHeight: 1.3,
+              lineHeight: 1.35,
               color: 'var(--ink-soft)',
               textAlign: 'center',
               whiteSpace: 'nowrap',
@@ -360,9 +358,9 @@ export function LoginPage() {
             aria-label="Scan CPS card"
             aria-busy={isReading}
             style={{
-              marginTop: 40,
-              width: 320,
-              height: 320,
+              marginTop: 48,
+              width: 420,
+              height: 420,
               background: 'transparent',
               border: 'none',
               padding: 0,
@@ -374,13 +372,12 @@ export function LoginPage() {
               borderRadius: '50%',
             }}
           >
-            {/* Stylised CPS card — static anchor. Auth progress (pulses,
-             * check circle, welcome) happens in the half-sheet rising from
-             * the bottom, not on the card itself, so the illustration stays
-             * put throughout reading → success to ground the tap gesture. */}
+            {/* Stylised CPS card — static anchor. The scan beam + result
+             * badge (✓ / ▲) animate on top of the card illustration, which
+             * itself stays put so the tap gesture has a single clear focus. */}
             <svg
-              width={156}
-              height={104}
+              width={220}
+              height={146}
               viewBox="0 0 112 76"
               style={{ position: 'absolute' }}
               aria-hidden="true"
@@ -425,6 +422,57 @@ export function LoginPage() {
               <line x1={14} y1={62} x2={74} y2={62} stroke={cardStroke} strokeWidth={1} opacity={0.35} />
             </svg>
 
+            {/* Scan beam — single horizontal pass across the card while
+             * the backend is checked. Purely decorative (aria-hidden);
+             * the aria-busy on the button announces the scan state. */}
+            {isReading && <div className="card-scan-line" aria-hidden="true" />}
+
+            {/* Success badge — filled --stable disc with a drawn ✓, seated
+             * at the top-right corner of the card (same anchor as the
+             * error ▲ so the two states share a visual axis). */}
+            <AnimatePresence>
+              {isSuccess && (
+                <motion.div
+                  key="ok"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                  style={{
+                    position: 'absolute',
+                    top: 98,
+                    right: 88,
+                    width: 44,
+                    height: 44,
+                    borderRadius: '50%',
+                    background: 'var(--bg)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <svg
+                    className="scan-check-circle"
+                    width={44}
+                    height={44}
+                    viewBox="0 0 100 100"
+                    aria-hidden="true"
+                  >
+                    <circle cx={50} cy={50} r={42} fill="var(--stable)" />
+                    <path
+                      className="scan-check-path"
+                      d="M32 52 L45 65 L70 38"
+                      fill="none"
+                      stroke="var(--bg)"
+                      strokeWidth={8}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Error badge — triangle, off-center on the card corner */}
             <AnimatePresence>
               {isError && (
@@ -436,10 +484,10 @@ export function LoginPage() {
                   transition={{ duration: 0.2 }}
                   style={{
                     position: 'absolute',
-                    top: 70,
-                    right: 70,
-                    width: 36,
-                    height: 36,
+                    top: 98,
+                    right: 88,
+                    width: 44,
+                    height: 44,
                     borderRadius: '50%',
                     background: 'var(--bg)',
                     display: 'flex',
@@ -468,6 +516,31 @@ export function LoginPage() {
             role="status"
           >
             <AnimatePresence mode="wait" initial={false}>
+              {isSuccess && (
+                <motion.div
+                  key="success"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{
+                    duration: 0.5,
+                    delay: 0.25,
+                    ease: [0.22, 1, 0.36, 1],
+                  }}
+                  style={{
+                    fontFamily: 'var(--serif)',
+                    fontStyle: 'italic',
+                    fontSize: 40,
+                    lineHeight: 1.05,
+                    letterSpacing: '-0.02em',
+                    color: 'var(--ink)',
+                    textAlign: 'center',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  Welcome again, {state.name}
+                </motion.div>
+              )}
               {isError && (
                 <motion.div
                   key="error"
@@ -559,25 +632,12 @@ export function LoginPage() {
               width: '100%',
             }}
           >
-            <div
-              style={{
-                fontFamily: 'var(--sans)',
-                fontSize: 15,
-                fontWeight: 500,
-                letterSpacing: '0.28em',
-                textTransform: 'uppercase',
-                color: 'var(--ink-soft)',
-              }}
-            >
-              Credentials
-            </div>
-
             <h1
               style={{
-                marginTop: 24,
+                marginTop: 0,
                 marginBottom: 0,
                 fontFamily: 'var(--serif)',
-                fontSize: 'clamp(80px, 10.5vw, 148px)',
+                fontSize: 'clamp(96px, 12.5vw, 180px)',
                 fontStyle: 'italic',
                 fontWeight: 400,
                 lineHeight: 0.98,
@@ -592,12 +652,12 @@ export function LoginPage() {
 
             <p
               style={{
-                marginTop: 28,
+                marginTop: 32,
                 marginBottom: 0,
                 fontFamily: 'var(--sans)',
-                fontSize: 20,
+                fontSize: 22,
                 fontWeight: 400,
-                lineHeight: 1.3,
+                lineHeight: 1.35,
                 color: 'var(--ink-soft)',
                 textAlign: 'center',
                 whiteSpace: 'nowrap',
@@ -795,291 +855,99 @@ export function LoginPage() {
         </motion.div>
       </section>
 
-      {/* ── Authentication half-sheet ───────────────────────────────────
-       * Rises from the bottom as soon as the reader engages. Carries the
-       * full auth narrative: scanning waves → check circle, rotating
-       * clinical labels → "Welcome again, {name}" + "Entering ward".
-       * Design-system compliant: 4 px radius, 1 px border, flat bg, no
-       * shadow/gradient (§6). The scrim is a flat fill, not a gradient. */}
-      <AnimatePresence>
-        {(isReading || isSuccess) && (
-          <>
+      {/* Auth seal — the ✓ "jumps" off the page. Two stacked layers so
+       * the disc and the ✓ path can animate independently: the disc
+       * pops in (spring), holds, then scales up 35× to cover the
+       * viewport; the ✓ path pops with it and fades during the cover
+       * stage so the final field is a clean --stable colour. Handoff to
+       * RootLayout's wipe-hold (same --stable via `haoma.wipeColor`)
+       * keeps the seam invisible across the /login → /ward unmount. */}
+      {departing && (
+        <>
+          <AnimatePresence>
+          {sealStage === 'pop' && (
+          <motion.div
+            key="seal-dots"
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ y: 80, opacity: 0 }}
+            transition={{
+              type: 'spring',
+              stiffness: 500,
+              damping: 22,
+              mass: 0.8,
+              delay: 0.04,
+            }}
+            aria-hidden="true"
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              marginLeft: -60,
+              marginTop: -60,
+              width: 120,
+              height: 120,
+              display: 'flex',
+              gap: 14,
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 51,
+              pointerEvents: 'none',
+            }}
+          >
+            {/* Three loading dots, staggered pulse — reads as "entering
+             * the ward, final handshake" rather than a static confirm
+             * mark. Each dot runs an opacity+scale loop; the 160 ms
+             * stagger between them gives the classic "…" cadence. */}
+            {[0, 1, 2].map((i) => (
+              <motion.span
+                key={i}
+                initial={{ y: 0 }}
+                animate={{ y: [0, -18, 0] }}
+                transition={{
+                  duration: 0.9,
+                  delay: i * 0.15,
+                  repeat: Infinity,
+                  ease: [0.3, 0, 0.35, 1],
+                }}
+                style={{
+                  width: 16,
+                  height: 16,
+                  borderRadius: '50%',
+                  background: 'var(--stable)',
+                }}
+              />
+            ))}
+          </motion.div>
+          )}
+          </AnimatePresence>
+          {/* Iris cover — radial clip-path expansion from the viewport
+           * centre. Fires after DOTS_EXIT_MS so the dots have time to
+           * drop off the bottom first, giving the iris a cleaner
+           * entrance. Handoff to RootLayout wipe-hold (same --bg,
+           * circle 150%) is seamless. */}
+          {sealStage === 'cover' && (
             <motion.div
-              key="auth-scrim"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+              key="seal-iris"
+              initial={{ clipPath: 'circle(0 at 50% 50%)' }}
+              animate={{ clipPath: 'circle(150% at 50% 50%)' }}
+              transition={{
+                duration: SEAL_COVER_MS / 1000,
+                delay: DOTS_EXIT_MS / 1000,
+                ease: [0.45, 0, 0.2, 1],
+              }}
               aria-hidden="true"
               style={{
                 position: 'fixed',
                 inset: 0,
-                background: 'rgba(6, 5, 3, 0.74)',
-                zIndex: 4,
+                background: 'var(--bg)',
+                zIndex: 52,
+                pointerEvents: 'none',
               }}
             />
-            <motion.aside
-              key="auth-sheet"
-              initial={{ y: '115%', x: '-50%' }}
-              animate={{ y: 0, x: '-50%' }}
-              exit={{ y: '115%', x: '-50%', opacity: 0 }}
-              transition={{
-                type: 'spring',
-                stiffness: 260,
-                damping: 30,
-                mass: 0.9,
-              }}
-              role="status"
-              aria-live="polite"
-              aria-label={isSuccess ? 'Authenticated' : 'Authenticating'}
-              style={{
-                position: 'fixed',
-                left: '50%',
-                bottom: 0,
-                // Horizontal centering is threaded through the x prop above
-                // so framer-motion's transform management doesn't clobber it.
-                width: 'min(680px, calc(100vw - 32px))',
-                background: 'var(--bg)',
-                borderTop: '1px solid var(--line)',
-                borderLeft: '1px solid var(--line)',
-                borderRight: '1px solid var(--line)',
-                borderRadius: '4px 4px 0 0',
-                padding: '48px 56px 56px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 24,
-                zIndex: 5,
-              }}
-            >
-              {/* Handle — thin grabber line anchored to the top edge */}
-              <div
-                aria-hidden="true"
-                style={{
-                  width: 64,
-                  height: 4,
-                  background: 'var(--line)',
-                  borderRadius: 2,
-                  marginTop: -24,
-                }}
-              />
-
-              {/* Caps header — crossfades between states, picks up --stable
-               * color on success to reinforce the clinical OK signal. */}
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.div
-                  key={isSuccess ? 'header-done' : 'header-progress'}
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  transition={{ duration: 0.24 }}
-                  style={{
-                    fontFamily: 'var(--sans)',
-                    fontSize: 15,
-                    fontWeight: 600,
-                    letterSpacing: '0.28em',
-                    textTransform: 'uppercase',
-                    color: isSuccess ? 'var(--stable)' : 'var(--ink-soft)',
-                  }}
-                >
-                  {isSuccess ? 'Authenticated' : 'Authentication'}
-                </motion.div>
-              </AnimatePresence>
-
-              {/* Visual center — pulse stack crossfades with the check
-               * circle on success. Intentionally no `mode="wait"` so the
-               * check scales in as the pulses fade, keeping the motion in
-               * sync with the chime (audio peaks ~20 ms, check spring
-               * ~150 ms — the sound is delayed by 140 ms to match). */}
-              <div style={{ position: 'relative', width: 152, height: 152 }}>
-                <AnimatePresence initial={false}>
-                  {isReading ? (
-                    <motion.div
-                      key="pulses"
-                      initial={{ opacity: 0, scale: 0.86 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.86 }}
-                      transition={{ duration: 0.18 }}
-                      style={{ position: 'absolute', inset: 0 }}
-                    >
-                      <svg
-                        className="scan-pulse-stack"
-                        width={152}
-                        height={152}
-                        viewBox="0 0 200 200"
-                        aria-hidden="true"
-                      >
-                        <circle className="scan-pulse scan-pulse--1" cx={100} cy={100} r={34} />
-                        <circle className="scan-pulse scan-pulse--2" cx={100} cy={100} r={34} />
-                        <circle className="scan-pulse scan-pulse--3" cx={100} cy={100} r={34} />
-                        <circle cx={100} cy={100} r={10} fill="var(--ink)" />
-                      </svg>
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key="check"
-                      initial={{ opacity: 0, scale: 0.6 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{
-                        // Tight spring: peaks near 140 ms to land with the
-                        // (delayed) chime. Slight scale-up-from-small for
-                        // the Apple-style snap.
-                        type: 'spring',
-                        stiffness: 460,
-                        damping: 26,
-                        mass: 0.6,
-                        delay: 0.05,
-                      }}
-                      style={{ position: 'absolute', inset: 0 }}
-                    >
-                      <svg
-                        width={152}
-                        height={152}
-                        viewBox="0 0 100 100"
-                        aria-hidden="true"
-                        overflow="visible"
-                      >
-                        <circle cx={50} cy={50} r={42} fill="var(--stable)" />
-                        <path
-                          className="scan-check-path"
-                          d="M32 52 L45 65 L70 38"
-                          fill="none"
-                          stroke="var(--bg)"
-                          strokeWidth={6}
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {/* Text region — fixed height so the sheet doesn't twitch on
-               * the reading → success swap. */}
-              <div
-                style={{
-                  minHeight: 104,
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  justifyContent: 'center',
-                }}
-              >
-                <AnimatePresence mode="wait" initial={false}>
-                  {isReading ? (
-                    <motion.div
-                      key="reading-labels"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      style={{
-                        position: 'relative',
-                        height: 28,
-                        minWidth: 320,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <AnimatePresence mode="wait" initial={false}>
-                        <motion.div
-                          key={readingStep}
-                          initial={{ opacity: 0, y: 8 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -8 }}
-                          transition={{
-                            duration: 0.3,
-                            ease: [0.22, 1, 0.36, 1],
-                          }}
-                          style={{
-                            position: 'absolute',
-                            fontFamily: 'var(--sans)',
-                            fontSize: 15,
-                            fontWeight: 500,
-                            letterSpacing: '0.28em',
-                            textTransform: 'uppercase',
-                            color: 'var(--ink-soft)',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {READING_LABELS[readingStep]}
-                        </motion.div>
-                      </AnimatePresence>
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key="success-labels"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        gap: 14,
-                      }}
-                    >
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{
-                          duration: 0.5,
-                          delay: 0.15,
-                          ease: [0.22, 1, 0.36, 1],
-                        }}
-                        style={{
-                          fontFamily: 'var(--serif)',
-                          fontStyle: 'italic',
-                          fontSize: 40,
-                          lineHeight: 1.05,
-                          letterSpacing: '-0.02em',
-                          color: 'var(--ink)',
-                          textAlign: 'center',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        Welcome again, {isSuccess ? state.name : ''}
-                      </motion.div>
-                      <motion.div
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{
-                          duration: 0.4,
-                          delay: 0.7,
-                          ease: [0.22, 1, 0.36, 1],
-                        }}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 10,
-                          fontFamily: 'var(--sans)',
-                          fontSize: 14,
-                          fontWeight: 500,
-                          letterSpacing: '0.28em',
-                          textTransform: 'uppercase',
-                          color: 'var(--ink-soft)',
-                        }}
-                      >
-                        <span>Entering ward</span>
-                        <span aria-hidden="true">→</span>
-                      </motion.div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </motion.aside>
-          </>
-        )}
-      </AnimatePresence>
-
-      {/* Bright snap-in flash — fires after the check has been held long
-       * enough to register, then hands the cover off to the RootLayout
-       * overlay (haoma.authWipe) which persists across the /ward mount. */}
-      {flashing && <div className="scan-bright-flash" aria-hidden="true" />}
+          )}
+        </>
+      )}
     </main>
   )
 }

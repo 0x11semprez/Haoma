@@ -621,42 +621,69 @@ body.night .enter-btn:hover {
   }
 }
 
-/* ── Login — Apple-Pay-style authentication rhythm ─────────────────────
- * Three beats: pulse waves emanate from the card (reading) → check circle
- * pops in with a drawn check path (identity confirmed) → full-viewport
- * bright flash snaps in and covers the /ward route handoff. Composite-
- * only animations (transform + opacity + stroke-dashoffset). */
+/* ── Login — card scan rhythm ──────────────────────────────────────────
+ * Three beats: a single horizontal beam sweeps across the card
+ * illustration (reading) → the card stroke flips to --stable and a ✓
+ * badge springs in (identity confirmed) → full-viewport bright flash
+ * snaps in and covers the /ward route handoff. Composite-only
+ * animations (transform + opacity + stroke-dashoffset). */
 
-/* Reading: three concentric pulse waves staggered at ~466 ms intervals.
- * Each wave loops 1.4 s total → a steady "push" rhythm while the backend
- * talks. Stroke is --ink-soft to stay off IEC alarm colors (§3.4). */
-.scan-pulse-stack {
+/* Reading: a thin vertical beam sweeps across the card in three passes
+ * (L→R→L→R) over MIN_SCAN_MS (2 s — must match Login.tsx). The round-
+ * trip motion reads as a deliberate instrument scan rather than a
+ * one-shot animation. The beam's top and bottom taper to transparent
+ * so it reads as an instrument line, not a hard bar. Stroke is --ink
+ * to stay off IEC alarm colors (§3.4); the keyframe caps peak opacity
+ * at 0.55 to keep it subtle. Card width is 220 px, so ±110 px from
+ * centre covers the full illustration. Each segment gets its own
+ * ease-in-out so the direction changes feel natural at the edges. */
+.card-scan-line {
   position: absolute;
-  inset: 0;
-  pointer-events: none;
-  overflow: visible;
-}
-.scan-pulse {
-  fill: none;
-  stroke: var(--ink-soft);
-  stroke-width: 1.5;
-  transform-box: fill-box;
-  transform-origin: 50% 50%;
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 146px;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    var(--ink) 28%,
+    var(--ink) 72%,
+    transparent 100%
+  );
+  transform: translate(calc(-50% - 110px), -50%);
   opacity: 0;
+  pointer-events: none;
   will-change: transform, opacity;
-  animation: scan-pulse 1400ms cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  animation: card-scan-sweep 2000ms linear forwards;
 }
-.scan-pulse--2 { animation-delay: 466ms; }
-.scan-pulse--3 { animation-delay: 933ms; }
-@keyframes scan-pulse {
-  0%   { transform: scale(0.55); opacity: 0; }
-  12%  { opacity: 0.85; }
-  100% { transform: scale(2.25); opacity: 0; }
+@keyframes card-scan-sweep {
+  0% {
+    transform: translate(calc(-50% - 110px), -50%);
+    opacity: 0;
+    animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1);
+  }
+  8%   { opacity: 0.55; }
+  33% {
+    transform: translate(calc(-50% + 110px), -50%);
+    opacity: 0.55;
+    animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1);
+  }
+  66% {
+    transform: translate(calc(-50% - 110px), -50%);
+    opacity: 0.55;
+    animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1);
+  }
+  92%  { opacity: 0.55; }
+  100% {
+    transform: translate(calc(-50% + 110px), -50%);
+    opacity: 0;
+  }
 }
 
-/* Success: the card is replaced by a filled --stable circle (authorized
- * identity — Normal priority in IEC terms) + a drawn check path. The disc
- * pops in with a spring; the check draws once the circle has settled. */
+/* Success: the card stroke transitions to --stable (200 ms, via the
+ * inline SVG) and a filled ✓ badge pops in at the top-right corner of
+ * the card. The disc pops in with a spring; the check draws once the
+ * circle has settled. */
 .scan-check-circle {
   transform-box: fill-box;
   transform-origin: 50% 50%;
@@ -679,26 +706,8 @@ body.night .enter-btn:hover {
   to { stroke-dashoffset: 0; }
 }
 
-/* Bright snap-in flash — fullscreen cover that fades to opacity 1 in
- * 180 ms. Uses --bg so night mode stays dark-safe for ICU use; the rhythm
- * reads as a hard flash regardless of absolute color. Hands off to
- * `.auth-wipe-hold` across the /login → /ward unmount. */
-.scan-bright-flash {
-  position: fixed;
-  inset: 0;
-  background: var(--bg);
-  pointer-events: none;
-  z-index: 50;
-  opacity: 0;
-  animation: scan-bright-flash 180ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
-}
-@keyframes scan-bright-flash {
-  0%   { opacity: 0; }
-  100% { opacity: 1; }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .scan-pulse {
+  .card-scan-line {
     animation: none;
     opacity: 0;
   }
@@ -710,10 +719,6 @@ body.night .enter-btn:hover {
   .scan-check-path {
     animation: none;
     stroke-dashoffset: 0;
-  }
-  .scan-bright-flash {
-    animation: none;
-    opacity: 1;
   }
 }
 
@@ -946,30 +951,36 @@ body.night .enter-btn:hover {
   }
 }
 
-/* ── Post-auth persistent overlay — survives /login → /ward unmount ──
+/* ── Post-auth persistent overlay — survives route unmount ─────────────
  * Rendered by RootLayout when sessionStorage `haoma.authWipe` is set.
- * Covers the AnimatePresence route crossfade (200 ms exit + 200 ms enter),
- * then fades out once Ward is on screen. Matches `.scan-wipe` color so
- * the reader's radial burst resolves into this overlay with no visible
- * seam. Timing: 450 ms solid hold, 550 ms fade-out → total 1000 ms. */
+ * Starts fully covered (circle 150% — matches the end-state of the seal
+ * disc on the previous page for a seamless handoff), holds briefly,
+ * then the iris contracts to circle(0) to reveal the destination route.
+ * Cinematic reveal that reads as a film-iris closing.
+ *
+ * Colour is driven by the `--wipe-color` custom property, set inline by
+ * RootLayout from sessionStorage `haoma.wipeColor` ('stable' on login,
+ * 'accent' on logout). Falls back to --bg if unset. */
 .auth-wipe-hold {
   position: fixed;
   inset: 0;
-  background: var(--bg);
+  background: var(--wipe-color, var(--bg));
   pointer-events: none;
   z-index: 60;
   opacity: 1;
-  animation: auth-wipe-hold 1000ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  clip-path: circle(150% at 50% 50%);
+  animation: auth-wipe-hold 900ms cubic-bezier(0.7, 0, 0.2, 1) forwards;
 }
 @keyframes auth-wipe-hold {
-  0%   { opacity: 1; }
-  45%  { opacity: 1; }
-  100% { opacity: 0; }
+  0%   { clip-path: circle(150% at 50% 50%); }
+  18%  { clip-path: circle(150% at 50% 50%); }
+  100% { clip-path: circle(0 at 50% 50%); }
 }
 @media (prefers-reduced-motion: reduce) {
   .auth-wipe-hold {
     animation: none;
     opacity: 0;
+    clip-path: none;
   }
 }
 

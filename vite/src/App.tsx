@@ -53,6 +53,7 @@ function RootLayout() {
   const outlet = useOutlet()
   const prefersReducedMotion = useReducedMotion()
   const [authWipe, setAuthWipe] = useState(false)
+  const [wipeColor, setWipeColor] = useState<'stable' | 'accent' | null>(null)
   // Previous pathname is tracked in state so direction can be computed
   // during render (React 19 forbids ref reads/writes at render time).
   // The state lags by one effect commit: on the render that handles a
@@ -65,6 +66,12 @@ function RootLayout() {
     try {
       if (sessionStorage.getItem('haoma.authWipe') === '1') {
         sessionStorage.removeItem('haoma.authWipe')
+        // Login/TopBar optionally pair the flag with a wipe colour so the
+        // contraction disc matches the seal that covered the previous page
+        // (green on sign-in, violet on sign-out). Default falls back to
+        // --bg via the CSS variable.
+        const color = sessionStorage.getItem('haoma.wipeColor')
+        sessionStorage.removeItem('haoma.wipeColor')
         // Legit external-state sync: Login writes this flag to sessionStorage
         // *just before* navigating. We flip React state to render the handoff
         // overlay. The experimental `set-state-in-effect` rule misfires here —
@@ -72,6 +79,10 @@ function RootLayout() {
         // ("subscribe for updates from some external system").
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setAuthWipe(true)
+        if (color === 'stable' || color === 'accent') {
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setWipeColor(color)
+        }
       }
     } catch {
       /* sessionStorage disabled — silent fallback, skip the overlay */
@@ -82,7 +93,10 @@ function RootLayout() {
     setPrevPath(location.pathname)
   }, [location.pathname])
 
-  const handleAuthWipeEnd = () => setAuthWipe(false)
+  const handleAuthWipeEnd = () => {
+    setAuthWipe(false)
+    setWipeColor(null)
+  }
 
   const fromPath = prevPath
   const toPath = location.pathname
@@ -175,6 +189,14 @@ function RootLayout() {
           className="auth-wipe-hold"
           aria-hidden="true"
           onAnimationEnd={handleAuthWipeEnd}
+          style={
+            wipeColor
+              ? ({
+                  ['--wipe-color' as string]:
+                    wipeColor === 'stable' ? 'var(--stable)' : 'var(--accent)',
+                } as React.CSSProperties)
+              : undefined
+          }
         />
       )}
     </>
