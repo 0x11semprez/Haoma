@@ -26,7 +26,7 @@ const FADE_HORIZONTAL: Variants = {
 };
 
 const HERO_PHRASES: readonly string[] = [
-  "haoma!",
+  "Haoma!",
   "Save every child.",
   "See the silent collapse.",
   "Hours before vital signs.",
