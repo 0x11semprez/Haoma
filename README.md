@@ -2,6 +2,8 @@
 
 > Detecting vascular collapse in critically ill children — **hours before vital signs show anything is wrong.**
 
+🎥 **Watch the demo:** [Haoma — MIT Hacking Medicine Paris 2026](https://youtu.be/vZW6b4Ea7pI)
+
 ## The problem Haoma addresses
 
 In a pediatric ICU, a deteriorating child is often *visibly stable* long after their smallest blood vessels have started to fail. Heart rate, blood pressure and oxygen saturation — the vitals everyone watches — only move **once compensation has already been exhausted**. By then, the window where treatment is cheapest and most effective has closed.
