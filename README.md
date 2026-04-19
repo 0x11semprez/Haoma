@@ -18,7 +18,7 @@ Haoma targets the **silent compensation phase** specifically — the hours durin
 Haoma reads the data the monitor is already collecting (heart rate, SpO₂, blood pressure, central and peripheral temperature, perfusion index, respiratory rate) and surfaces three things to the clinician, continuously:
 
 1. **A risk score** (0–100) that rises as microvascular compensation deteriorates.
-2. **Physical quantities** — estimated peripheral vascular resistance and capillary flow — that a physician can read the same way they read a lab value.
+2. **Physical quantities** — estimated peripheral vascular resistance (R̂) and micro-vascular flow (Q̂) — that a physician can read the same way they read a lab value.
 3. **A plain-language explanation** of *why* the score is rising right now (e.g. *"thermal gradient widening, heart-rate variability dropping"*), built from SHAP attributions on the model.
 
 It is a **decision-support tool**. Clinical judgment remains sovereign. Haoma never triggers a therapy; it only buys the clinician earlier, better-qualified attention.
@@ -27,7 +27,7 @@ It is a **decision-support tool**. Clinical judgment remains sovereign. Haoma ne
 
 - **Earlier attention, not more alarms.** Instead of a red light triggered once vitals cross a threshold, the clinician sees a *trajectory* — a score that starts drifting upward hours before the classical alarm would fire. That lead time converts into things that are operationally cheap now and expensive later: a bedside reassessment, a lactate check, a fluid challenge, a call to the consultant.
 - **An interpretable signal, not a black-box alert.** Each rise in the score is paired with the physiological quantities driving it and a short sentence. That is what makes the tool usable in a medico-legal context where "the AI said so" is not an acceptable answer.
-- **One less dashboard to stitch together mentally.** The same interface shows vitals, engineered features (delta-T, HRV slope, PI/HR), physics quantities (R̂, Q̂) and the score — already aligned on the same timeline.
+- **One less dashboard to stitch together mentally.** The same interface shows vitals, the four engineered features (delta-T, HRV slope, PI/HR ratio, 30-min degradation slope), physics quantities (R̂, Q̂) and the score — already aligned on the same timeline.
 
 We deliberately **do not** claim a specific percentage of time saved or a specific reduction in medical error. Those numbers only exist after a prospective clinical evaluation, which a hackathon prototype does not have. What Haoma proposes is the *signal* and the *lead time* — the operational gain is what a unit team builds around it.
 
@@ -46,7 +46,7 @@ Design system and compliance rules are frozen in [`vite/CLAUDE.md`](vite/CLAUDE.
 
 ## How it works (one paragraph)
 
-A small **Physics-Informed Neural Network** (3–4 fully-connected layers, 64–128 units, Tanh/GELU) takes the engineered physiological features as input and predicts three quantities: the estimated peripheral vascular resistance (R̂), the estimated microcirculatory flow (Q̂), and the Haoma Index. Two physics-based loss terms — a pressure-flow constraint and a temporal-conservation penalty — anchor R̂ and Q̂ to Navier-Stokes-inspired behavior, so the score shares the latent representation of physically-coherent quantities rather than of arbitrary correlations. SHAP attributions explain each prediction in terms of the input features a clinician already knows. The API is modeled on FHIR Observation, with real LOINC codes for each vital.
+A small **Physics-Informed Neural Network** — a shared trunk of 3 fully-connected layers of 64 units with Tanh activation, feeding three heads — takes the four engineered physiological features (delta-T, HRV trend, PI/HR ratio, 30-min degradation slope) and predicts three quantities: the estimated peripheral vascular resistance (R̂), the micro-vascular flow (Q̂), and the Haoma Index. Two physics-based loss terms — a pressure-flow constraint (Ohm's vascular law, Q̂ ≈ ΔP / R̂) and a temporal-coherence penalty on dQ̂/dt — anchor R̂ and Q̂ to physically-coherent behavior, so the score shares the latent representation of these quantities rather than that of arbitrary correlations. SHAP attributions explain each prediction in terms of the input features a clinician already knows. The API is modeled on FHIR Observation, with real LOINC codes for each vital (heart rate `8867-4`, SpO₂ `2708-6`, systolic BP `8480-6`, diastolic BP `8462-4`, respiratory rate `9279-1`, central temperature `8329-5`, peripheral temperature `8310-5`, perfusion index `61006-3`).
 
 ## What Haoma is not
 
