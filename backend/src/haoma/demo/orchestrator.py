@@ -137,5 +137,4 @@ if __name__ == "__main__":
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(fake_frames, f, indent=2, ensure_ascii=False)
         
-    print(f"✅ Fichier créé avec succès : {output_path}")
-    print("🚀 Tu peux maintenant lancer le serveur FastAPI !")
+    print(f"Fichier créé avec succès : {output_path}")
