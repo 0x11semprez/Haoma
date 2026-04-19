@@ -2,7 +2,9 @@
 
 > Detecting vascular collapse in critically ill children — **hours before vital signs show anything is wrong.**
 
-🎥 **Watch the demo:** [Haoma — MIT Hacking Medicine Paris 2026](https://youtu.be/vZW6b4Ea7pI)
+![Haoma — silent compensation phase: Haoma Index rising while macro vitals still read nominal](docs/screenshots/05-patient-watch.png)
+
+*The thesis in one screen. Haoma Index at 43/100, trajectory worsening — while heart rate, SpO₂ and blood pressure still read within their reference ranges. This is the window Haoma is built to surface.*
 
 ## The problem Haoma addresses
 
@@ -32,6 +34,52 @@ It is a **decision-support tool**. Clinical judgment remains sovereign. Haoma ne
 - **One less dashboard to stitch together mentally.** The same interface shows vitals, the four engineered features (delta-T, HRV slope, PI/HR ratio, 30-min degradation slope), physics quantities (R̂, Q̂) and the score — already aligned on the same timeline.
 
 We deliberately **do not** claim a specific percentage of time saved or a specific reduction in medical error. Those numbers only exist after a prospective clinical evaluation, which a hackathon prototype does not have. What Haoma proposes is the *signal* and the *lead time* — the operational gain is what a unit team builds around it.
+
+## Product walkthrough
+
+A run through the interface a clinician actually sees — from the login screen to the critical-state dashboard. Every screen below is the real frontend talking to the real backend; nothing is a mockup.
+
+### 1. Entry
+
+![Haoma landing screen](docs/screenshots/01-landing.png)
+
+Quiet serif splash — the Instrument Serif mark sets the same calm tone the rest of the UI keeps under alarm conditions. Night-mode and audio toggles live in the top-right where a clinician expects them.
+
+### 2. Authentication
+
+![Tap your CPS card — professional health card login](docs/screenshots/02-auth-cps.png)
+
+Login is a tap of the French professional health card (CPS), the same credential clinicians already use for every hospital system. Credentials-based sign-in is one click away for fallback.
+
+### 3. Ward handoff
+
+![Ward overview — triage counts and per-room patient cards](docs/screenshots/03-ward-overview.png)
+
+The screen a nurse sees when coming on shift. Triage counts at a glance — `Critical / Watch / Stable` — and every patient carded by room. No nested menus, no tabs, no modal chain.
+
+### 4. Patient, stable
+
+![Patient dashboard in stable state — Haoma Index 5/100, green](docs/screenshots/04-patient-stable.png)
+
+Haoma Index 5/100 ● **stable**. Vitals (with their LOINC codes visible), PINN physical quantities (R̂ and Q̂), the four derived indicators (ΔT, HRV trend, PI/HR, degradation slope) and the 4-minute score chart — all aligned on a single timeline. No dashboard to stitch together mentally.
+
+### 5. Silent compensation
+
+![Patient dashboard in watch state — Haoma Index 43/100, worsening, macro vitals still nominal](docs/screenshots/05-patient-watch.png)
+
+Haoma Index 43/100 ◆ **watch, worsening**. Macro vitals still read nominal — and the banner calls it out explicitly: *silent compensation · macro vitals nominal*. This is the exact phase the product exists to make visible.
+
+### 6. Critical
+
+![Patient dashboard in critical state — Haoma Index 61/100, trajectory bending](docs/screenshots/06-patient-critical.png)
+
+Haoma Index 61/100 ▲ **critical**. The score-evolution chart now shows the full shape: long compensation plateau, then the bend. Hovering the curve surfaces the timestamp Haoma first crossed into Watch — the lead time made auditable.
+
+### 7. Critical, escalated
+
+![Patient dashboard in critical state escalated — Haoma Index 95/100, macro vitals finally moving](docs/screenshots/07-patient-critical-peak.png)
+
+Haoma Index 95/100. Macro vitals are finally moving (BP 54/36, SpO₂ 90). By this point the clinician has already had the lead time the score was buying them — reassessment, fluids, escalation — and the chart reads as a full trajectory, not a surprise.
 
 ## Clinical-grade, accessible frontend
 
